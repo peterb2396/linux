@@ -1,0 +1,1 @@
+int toUpper(char *inData);
