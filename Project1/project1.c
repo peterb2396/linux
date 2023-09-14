@@ -10,6 +10,7 @@
 
 #define MAX_BUFFER_SIZE 65
 #define _XOPEN_SOURCE 500
+#define NEW_FILE_NAME 28
 
 void producer(int pipe_fd[2], const char* folder_path);
 void consumer(int pipe_fd[2]);
@@ -52,6 +53,8 @@ int main() {
 void producer(int pipe_fd[2], const char* folder_path) {
     DIR* dir;
     struct dirent* ent;
+    FILE *doneFile;
+    FILE *binfFile;
 
     if ((dir = opendir(folder_path)) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
@@ -84,10 +87,20 @@ void producer(int pipe_fd[2], const char* folder_path) {
                         closedir(dir);
                     }
 
+                    // Notify consumer to create chage their file reference / make the new files
+                    sprintf(buffer, "%c%s", NEW_FILE_NAME, inpf);
+                    write(pipe_fd[1], buffer, sizeof(buffer));
+
+                    // close old files, making new ones
+                    if (binfFile)
+                        fclose(binfFile);
+                    if (doneFile)
+                        fclose(doneFile);
+
                     // prepare file.binf
                     char binf_file_name[50]; 
                     snprintf(binf_file_name, sizeof(binf_file_name), "./output/%s/%s.binf", inpf, inpf);
-                    FILE *binfFile = fopen(binf_file_name, "w");
+                    binfFile = fopen(binf_file_name, "w");
 
                     if (binfFile == NULL) {
                         perror("Error opening binf file");
@@ -95,13 +108,22 @@ void producer(int pipe_fd[2], const char* folder_path) {
                         return;
                     }
 
-                    //...
+                    // prepare file.done
+                    char done_file_name[50]; 
+                    snprintf(done_file_name, sizeof(done_file_name), "./output/%s/%s.done", inpf, inpf);
+                    doneFile = fopen(done_file_name, "w");
+
+                    if (doneFile == NULL) {
+                        perror("Error opening done file");
+                        fclose(input_file); // close the input fd to avoid mem leaks
+                        return;
+                    }
 
 
+                        // *** ALL FILES ARE NOW CREATED AND REFERENCED ***
 
 
                     // Read the input in chunks of 64, pipe & fork to frame.
-                    
                     while ((num_read = fread(buffer, 1, 64, input_file)) > 0) {
                         
                         // Create a pipe to communicate with frame.c
@@ -210,9 +232,7 @@ void producer(int pipe_fd[2], const char* folder_path) {
                                 // Here, we have the encoded_frame!
                                 // Write the encoded frame to the file
                                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
-                                
-                                
-
+                      
                             }
                             
 
@@ -254,17 +274,14 @@ void producer(int pipe_fd[2], const char* folder_path) {
 
 void consumer(int pipe_fd[2]) {
 
-    char message[100];
+    // Define file pointers
+    FILE* outfFile;
+    FILE* chckFile;
 
-    // Open the output file in the "output" folder
-    char output_file_name[256]; 
-    snprintf(output_file_name, sizeof(output_file_name), "./output/%s/%s.out", "file", "file");
-    FILE* output_file = fopen(output_file_name, "w");
+    char message[100]; // stream from main pipe
+    char *inpf;     // name of input file currently being processed
 
-    if (output_file == NULL) {
-        perror("fopen");
-        return;
-    }
+    
 
     while (1) {
         ssize_t bytes_read = read(pipe_fd[0], message, sizeof(message));
@@ -273,12 +290,46 @@ void consumer(int pipe_fd[2]) {
             break; // End of processing
         }
 
-        // Check if we recieved special signal to change the output file
+        // Check if we recieved special signal to change the target file
+        // Must signal this for each input file that we begin to process
+        if ((int)message[0] == NEW_FILE_NAME)
+        {
+            // New file name is a pointer to the string beginning after the control char
+            inpf = &message[1]; 
+
+            // Create the new consumer files, close old ones first
+            if (outfFile)
+                fclose(outfFile);
+            if (chckFile)
+                fclose(chckFile);
+            // prepare the outf file in the "output" folder
+            char outf_file_name[256]; 
+            snprintf(outf_file_name, sizeof(outf_file_name), "./output/%s/%s.outf", inpf, inpf);
+            FILE* outfFile = fopen(outf_file_name, "w");
+
+            if (outfFile == NULL) {
+                perror("fopen");
+                return;
+            }
+
+            // prepare file.chck
+            char chck_file_name[50]; 
+            snprintf(chck_file_name, sizeof(chck_file_name), "./output/%s/%s.chck", inpf, inpf);
+            FILE *chckFile = fopen(chck_file_name, "w");
+
+            if (chckFile == NULL) {
+                perror("Error opening binf file");
+                return;
+            }
+
+        }
 
 
         // Write the message to the output file
-        fwrite(message, 1, bytes_read, output_file);
+        fwrite(message, 1, bytes_read, outfFile);
     }
 
-    fclose(output_file);
+    // Finally, close the last opened files
+    fclose(outfFile);
+    fclose(chckFile);
 }
