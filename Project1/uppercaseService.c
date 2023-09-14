@@ -32,6 +32,6 @@ int main(int argc, char* argv[]) {
     
 
     // Finished capitalizing. Close pipe and return
-    close(uppercase_pipe[0]); 
+    close(uppercase_pipe[1]); 
     return EXIT_SUCCESS;
 }

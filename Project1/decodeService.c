@@ -43,20 +43,20 @@ int main(int argc, char* argv[]) {
         // For each bit in the byte
         for (int j = 0; j < 8; j++)
         {
-            num += (j == 0)? 0: (int)buffer[i+j] * power(2, (8-j));
-            printf("%d", (int)buffer[i+j]);
+            num += (j == 0)? 0: ((int)buffer[i+j] - 48) * power(2, (8-j));
+            printf("%d", (j == 0)? 0: ((int)buffer[i+j] - 48));
         }
             
             
         // The ASCII letter
         char ch = (char)num;
-        //printf("%c\n", ch);
+        printf(" %d\n", num);
         
         // Send the char through the pipe
         write(decode_pipe[1], &ch, 1);
     }
 
     // Finished encoding, close pipe & return
-    close(decode_pipe[0]); 
+    close(decode_pipe[1]); 
     return EXIT_SUCCESS;
 }

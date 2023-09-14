@@ -40,6 +40,6 @@ int main(int argc, char* argv[]) {
     }
 
     // Finished encoding, close pipe & return
-    close(encode_pipe[0]); 
+    close(encode_pipe[1]); 
     return EXIT_SUCCESS;
 }
