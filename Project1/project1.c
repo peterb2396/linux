@@ -278,8 +278,8 @@ void consumer(int pipe_fd[2]) {
     FILE* outfFile;
     FILE* chckFile;
 
-    char message[100]; // stream from main pipe
-    char *inpf;     // name of input file currently being processed
+    char message[67 * 8]; // encoded stream (usually) from main pipe
+    char *inpf;           // name of input file currently being processed
 
     
 
@@ -302,6 +302,7 @@ void consumer(int pipe_fd[2]) {
                 fclose(outfFile);
             if (chckFile)
                 fclose(chckFile);
+
             // prepare the outf file in the "output" folder
             char outf_file_name[256]; 
             snprintf(outf_file_name, sizeof(outf_file_name), "./output/%s/%s.outf", inpf, inpf);
@@ -323,10 +324,44 @@ void consumer(int pipe_fd[2]) {
             }
 
         }
+        else // we are reading data
+        {
+                    // *** .outf PROCESS ***
+
+            // First step is to decode
 
 
-        // Write the message to the output file
-        fwrite(message, 1, bytes_read, outfFile);
+            // Next, we deframe
+
+
+            // Then, we uppercase
+
+
+            // Penultimately, write to .outf
+            fwrite(message, 1, bytes_read, outfFile);
+
+            // Finally, pass the data to encoding process to prepare for .chck
+
+
+
+                    // *** .chck PROCESS ***
+
+            // First, frame the data chunk again
+
+
+            // Next, encode it
+
+
+            // Then, write chunk to .chck file
+
+
+            // Finally, send the same chunk through pipe back to producer
+
+            
+        }
+
+
+        
     }
 
     // Finally, close the last opened files
