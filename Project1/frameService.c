@@ -2,32 +2,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_BUFFER_SIZE 65
 
 int main(int argc, char *argv[]) {
+
+    if (argc < 3)
+    {
+        // We are probably just compiling the file, don't run without args
+        return EXIT_FAILURE;
+    }
+    
     char buffer[MAX_BUFFER_SIZE];
-    int num_read;
+    int frame_pipe[2];
 
-    // Open the output file for writing the framed data
-    char outputFilename[256]; 
-    snprintf(outputFilename, sizeof(outputFilename), "./output/%s/%s.framed", argv[1], argv[1]);
-    FILE* output_file = fopen(outputFilename, "ab");
-    if (output_file == NULL) {
-        perror("fopen");
-        exit(EXIT_FAILURE);
-    }
+    frame_pipe[0] = atoi(argv[1]); // Assign the first integer
+    frame_pipe[1] = atoi(argv[2]); // Assign the second integer
 
-    while ((num_read = fread(buffer, 1, 64, stdin)) > 0) {
-        char framed_message[68];
-        framed_message[0] = (char)22;  // First SYN character
-        framed_message[1] = (char)22;  // Second SYN character
-        framed_message[2] = (char)num_read;  // Length
-        fwrite(framed_message, 1, 3, output_file);  // Write the first 3 bytes
-        fwrite(buffer, 1, num_read, output_file);  // Write the data block
-    }
+    // Read the block of data from the producer through the frame pipe
+    __ssize_t num_read = read(frame_pipe[0], buffer, sizeof(buffer));
+    close(frame_pipe[0]);
 
-    fclose(output_file);
+    char control[3];
+    control[0] = (char)22;  // First SYN character
+    control[1] = (char)22;  // Second SYN character
+    control[2] = (char)num_read;  // Length
 
-    return 0;
+    // Send ctrl characters through the pipe. Then, send the data block
+    write(frame_pipe[1], control, sizeof(control));
+    write(frame_pipe[1], buffer, num_read);
+
+    // close this writing pipe, we are done
+    close(frame_pipe[1]);
+
+    return EXIT_SUCCESS;
 }

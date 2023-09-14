@@ -1,42 +1,45 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 int main(int argc, char* argv[]) {
-    char framed_file_name[256]; 
-    snprintf(framed_file_name, sizeof(framed_file_name), "./output/%s/%s.framed", argv[1], argv[1]);
-    FILE *inputFile = fopen(framed_file_name, "rb");
 
-    if (inputFile == NULL) {
-        perror("Error opening input file");
-        return 1;
+    if (argc < 3)
+    {
+        // We are probably just compiling the file, don't run without args
+        return EXIT_FAILURE;
     }
+    
+    char buffer[67];
+    int encode_pipe[2];
 
-    // Name the output file 
-    char output_file_name[256]; 
-    snprintf(output_file_name, sizeof(output_file_name), "./output/%s/%s.binf", argv[1], argv[1]);
-    FILE *outputFile = fopen(output_file_name, "w");
+    encode_pipe[0] = atoi(argv[1]); // Assign the first integer
+    encode_pipe[1] = atoi(argv[2]); // Assign the second integer
 
-    if (outputFile == NULL) {
-        perror("Error opening output file");
-        fclose(inputFile);
-        return 1;
-    }
+    // Read the frame from the producer through the encode pipe
+    __ssize_t num_read = read(encode_pipe[0], buffer, sizeof(buffer));
+    close(encode_pipe[0]); 
 
-    int ch;
-
-    while ((ch = fgetc(inputFile)) != EOF) {
-        // add parity bit
-        fprintf(outputFile, "%d", __builtin_parity(ch)? 0 : 1);
+    for (int i = 0; i < num_read; i++) {
+        char ch = buffer[i];
+        // Send the parity bit through the pipe, first
+        write(encode_pipe[1], __builtin_parity((int)ch)? "0" : "1", 1);
         
         // For the next 7 bits...
         for (int i = 6; i >= 0; i--) {
             // Determine whether the bit at position i should be one
-            int bit = (ch >> i) & 1;
-            fprintf(outputFile, "%d", bit);
+            int bit = ((int)ch >> i) & 1;
+            char bit_str[1];
+            sprintf(bit_str, "%d", bit);
+            
+            write(encode_pipe[1], bit_str, 1);
         }
+        //write(encode_pipe[1], " ", 1); // write space for debugging
+        // if commenting out be sure to change encode buffer size to 67 * 8 in producer
     }
 
-    fclose(inputFile);
-    fclose(outputFile);
-
-    return 0;
+    // Finished encoding, close pipe & return
+    close(encode_pipe[0]); 
+    return EXIT_SUCCESS;
 }
