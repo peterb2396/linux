@@ -212,8 +212,6 @@ void producer(int pipe_fd[2], const char* folder_path) {
                             }
                             else
                             {
-                                // Parent: completed encoding of this frame. Can now formulate .binf
-                                
                                 // Write data to be encoded through encode pipe
                                 write(encode_pipe[1], frame, frame_len);
                                 close(encode_pipe[1]);  // Done writing frame to be encoded
@@ -230,8 +228,9 @@ void producer(int pipe_fd[2], const char* folder_path) {
                                 close(encode_pipe[0]);  // Done reading encode data
 
                                 // Here, we have the encoded_frame!
-                                // Write the encoded frame to the file
+                                // Write the encoded frame to the file, AND to the consumer to decode!
                                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
+                                write(pipe_fd[1], encoded_frame, encoded_len);
                       
                             }
                             
@@ -273,7 +272,7 @@ void producer(int pipe_fd[2], const char* folder_path) {
 }
 
 void consumer(int pipe_fd[2]) {
-
+    
     // Define file pointers
     FILE* outfFile;
     FILE* chckFile;
@@ -296,17 +295,14 @@ void consumer(int pipe_fd[2]) {
         {
             // New file name is a pointer to the string beginning after the control char
             inpf = &message[1]; 
-
-            // Create the new consumer files, close old ones first
-            if (outfFile)
-                fclose(outfFile);
-            if (chckFile)
-                fclose(chckFile);
+            
+            // Create the new consumer files
 
             // prepare the outf file in the "output" folder
             char outf_file_name[256]; 
             snprintf(outf_file_name, sizeof(outf_file_name), "./output/%s/%s.outf", inpf, inpf);
-            FILE* outfFile = fopen(outf_file_name, "w");
+            outfFile = fopen(outf_file_name, "w");
+
 
             if (outfFile == NULL) {
                 perror("fopen");
@@ -316,7 +312,7 @@ void consumer(int pipe_fd[2]) {
             // prepare file.chck
             char chck_file_name[50]; 
             snprintf(chck_file_name, sizeof(chck_file_name), "./output/%s/%s.chck", inpf, inpf);
-            FILE *chckFile = fopen(chck_file_name, "w");
+            chckFile = fopen(chck_file_name, "w");
 
             if (chckFile == NULL) {
                 perror("Error opening binf file");
@@ -328,42 +324,191 @@ void consumer(int pipe_fd[2]) {
         {
                     // *** .outf PROCESS ***
 
-            // First step is to decode
+                // DECODE
+
+            // Pipe before forking to share a pipe for 
+            // transmission of data
+            int decode_pipe[2];
+            if (pipe(decode_pipe) == -1) {
+                perror("pipe");
+                exit(EXIT_FAILURE);
+            }
+            
+            // Attempt to fork so child can exec the subroutine
+            fflush(stdout);
+            pid_t decode_pid = fork();
+            if (decode_pid == -1) {
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }
+            // Decode this single frame
+            if (decode_pid == 0)
+            {
+                // Make string versions of the pipe id's to pass to argv
+                char decode_read[2]; // Buffer for converting arg1 to a string
+                char decode_write[2]; // Buffer for converting arg2 to a string
+
+                // Convert integers to strings
+                snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
+                snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
+                
+                // Child process: Call encode then die
+                execl("decodeService", "decodeService", decode_read, decode_write, NULL);
+                perror("execl");  // If execl fails
+                exit(EXIT_FAILURE);
+            }
+            else // Parent
+            {
+                // Write data to be decoded through decode pipe
+                write(decode_pipe[1], message, bytes_read);
+                close(decode_pipe[1]);  // Done writing frame to be decoded
+
+                // When child is done, read result
+                wait(NULL);
+
+                // Parent reads result from the child process (the decoded frame)
+                char decoded_frame[67]; // The decoded frame is 1/8 the size
+                    // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
+
+                // Listen for & store decoded frame
+                int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
+                close(decode_pipe[0]);  // Done reading encode data
+
+                // Here, we have the decoded frame!
+
+                // Now, it's time to deframe it back to a chunk.
+
+                // Create a pipe to communicate with deframe.c
+                int deframe_pipe[2];
+                if (pipe(deframe_pipe) == -1) {
+                    perror("pipe");
+                    exit(EXIT_FAILURE);
+                }
+                fflush(stdout);
+                pid_t deframe_pid = fork();
+
+                if (deframe_pid == -1) {
+                    perror("fork");
+                    exit(EXIT_FAILURE);
+                }
+
+                if (deframe_pid == 0) {
+                    char deframe_read[2]; // Buffer for converting arg1 to a string
+                    char deframe_write[2]; // Buffer for converting arg2 to a string
+
+                    // Convert integers to strings
+                    snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
+                    snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
+                    
+                    // Child process (deframe.c)
+                    execl("deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
+                    perror("execl");  // If execl fails
+                    exit(EXIT_FAILURE);
+                } else {
+                    // Parent process
+                    // Write data to be framed to deframe.c through the deframe pipe
+                    write(deframe_pipe[1], decoded_frame, decoded_len);
+                    close(deframe_pipe[1]);
+
+                    // When child is done, read chunk (ctrl chars removed)
+                    wait(NULL);
+                    char chunk[65]; // The frame to be recieved will be stored here
+
+                    int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
+                    close(deframe_pipe[0]); 
+                    
+
+                    // Null-terminate
+                    if (chunk_len > 0) {
+                        if (chunk_len < sizeof(chunk)) { //64 < 65
+                            chunk[chunk_len] = '\0';
+                        } else {
+                            printf("WARNING! chunk size too small, overwrote last char. len: %d\n", chunk_len);
+                            chunk[sizeof(chunk) - 1] = '\0';
+                        }
+                    }
 
 
-            // Next, we deframe
+                    // Create a pipe to communicate with capitalize.c
+                    int uppercase_pipe[2];
+                    if (pipe(uppercase_pipe) == -1) {
+                        perror("pipe");
+                        exit(EXIT_FAILURE);
+                    }
+                    fflush(stdout);
+                    pid_t uppercase_pid = fork();
+
+                    if (uppercase_pid == -1) {
+                        perror("fork");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    if (uppercase_pid == 0) {
+
+                        char uppercase_read[2]; // Buffer for converting arg1 to a string
+                        char uppercase_write[2]; // Buffer for converting arg2 to a string
+
+                        // Convert integers to strings
+                        snprintf(uppercase_read, sizeof(uppercase_read), "%d", uppercase_pipe[0]);
+                        snprintf(uppercase_write, sizeof(uppercase_write), "%d", uppercase_pipe[1]);
+                        
+                        // Child process (uppercase.c)
+                        execl("uppercaseService", "uppercaseService", uppercase_read, uppercase_write, NULL);  // Execute deframe.c
+                        perror("execl");  // If execl fails
+                        exit(EXIT_FAILURE);
+                    } else {
+                        // Parent process
+                        // Write chunk to be capped to uppercase.c through the uppercase pipe
+                        write(uppercase_pipe[1], chunk, chunk_len);
+                        close(uppercase_pipe[1]); 
+
+                        // When child is done, read chunk (capitalized)
+                        wait(NULL);
+                        char cap_chunk[65]; // The capital chunk
+
+                        int cap_chunk_len = read(uppercase_pipe[0], cap_chunk, sizeof(cap_chunk));
+                        close(uppercase_pipe[0]); 
+
+                        // Null-terminate
+                        // if (chunk_len > 0) {
+                        //     if (chunk_len < sizeof(chunk)) { //64 < 65
+                        //         chunk[chunk_len] = '\0';
+                        //     } else {
+                        //         printf("WARNING! chunk size too small, overwrote last char");
+                        //         chunk[sizeof(chunk) - 1] = '\0';
+                        //     }
+                        // }
+
+                        // Penultimately, write to .outf
+                        fwrite(cap_chunk, 1, cap_chunk_len, outfFile);
 
 
-            // Then, we uppercase
+                        // *** .chck PROCESS ***
+
+                        // First, frame the data chunk again
 
 
-            // Penultimately, write to .outf
-            fwrite(message, 1, bytes_read, outfFile);
-
-            // Finally, pass the data to encoding process to prepare for .chck
+                        // Next, encode it
 
 
-
-                    // *** .chck PROCESS ***
-
-            // First, frame the data chunk again
+                        // Then, write chunk to .chck file
 
 
-            // Next, encode it
-
-
-            // Then, write chunk to .chck file
-
-
-            // Finally, send the same chunk through pipe back to producer
+                        // Finally, send the same chunk through pipe back to producer
+                    
+                    
+                    }
+                
+            }
 
             
         }
-
+        
 
         
     }
-
+    
+    }
     // Finally, close the last opened files
     fclose(outfFile);
     fclose(chckFile);
