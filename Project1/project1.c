@@ -412,7 +412,7 @@ void consumer(int pipe_fd[2]) {
 
                     // When child is done, read chunk (ctrl chars removed)
                     wait(NULL);
-                    char chunk[65]; // The frame to be recieved will be stored here
+                    char chunk[70]; // The frame to be recieved will be stored here
 
                     int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
                     close(deframe_pipe[0]); 
@@ -464,20 +464,10 @@ void consumer(int pipe_fd[2]) {
 
                         // When child is done, read chunk (capitalized)
                         wait(NULL);
-                        char cap_chunk[65]; // The capital chunk
+                        char cap_chunk[66]; // The capital chunk
 
                         int cap_chunk_len = read(uppercase_pipe[0], cap_chunk, sizeof(cap_chunk));
                         close(uppercase_pipe[0]); 
-
-                        // Null-terminate
-                        // if (chunk_len > 0) {
-                        //     if (chunk_len < sizeof(chunk)) { //64 < 65
-                        //         chunk[chunk_len] = '\0';
-                        //     } else {
-                        //         printf("WARNING! chunk size too small, overwrote last char");
-                        //         chunk[sizeof(chunk) - 1] = '\0';
-                        //     }
-                        // }
 
                         // Penultimately, write to .outf
                         fwrite(cap_chunk, 1, cap_chunk_len, outfFile);

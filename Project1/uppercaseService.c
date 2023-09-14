@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
     __ssize_t num_read = read(uppercase_pipe[0], buffer, sizeof(buffer));
     close(uppercase_pipe[0]); 
 
-    for (int i = 0; i < num_read - 1; i++) { // Exclude the null terminator
+    for (int i = 0; i < num_read; i++) { // Exclude the null terminator
         char cap_char = toupper(buffer[i]);
         write(uppercase_pipe[1], &cap_char, sizeof(char));
     }

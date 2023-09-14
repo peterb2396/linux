@@ -39,18 +39,14 @@ int main(int argc, char* argv[]) {
     // For each byte...
     for (int i = 0; i < num_read; i+=8) {
         int num = 0; //the ascii value of this byte
-        printf("\n");
+        //printf("\n");
         // For each bit in the byte
         for (int j = 0; j < 8; j++)
-        {
-            num += (j == 0)? 0: ((int)buffer[i+j] - 48) * power(2, (8-j));
-            printf("%d", (j == 0)? 0: ((int)buffer[i+j] - 48));
-        }
+            num += ((j == 0)? 0: (((int)buffer[i+j] - 48) * power(2, (7-j))));
             
             
         // The ASCII letter
         char ch = (char)num;
-        printf(" %d\n", num);
         
         // Send the char through the pipe
         write(decode_pipe[1], &ch, 1);
