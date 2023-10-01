@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
     // ex of incoming stream: SS@Hello, World!
     __ssize_t num_read = read(deframe_pipe[0], buffer, sizeof(buffer));
     close(deframe_pipe[0]);
-    // Send the deframed chunk through the pipe
+    // Send the deframed chunk through the pipe. It will be 3 chars shorter than input.
     write(deframe_pipe[1], chunk, num_read - 3);
 
     // close this writing pipe, we are done

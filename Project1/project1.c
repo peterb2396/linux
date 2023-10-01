@@ -7,10 +7,12 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <ftw.h>
+#include <math.h>
 
 #define MAX_BUFFER_SIZE 65
 #define _XOPEN_SOURCE 500
 #define NEW_FILE_NAME 28
+#define FRAME_LEN 64
 
 void producer(int pipe_fd[2], const char* folder_path);
 void consumer(int pipe_fd[2]);
@@ -63,7 +65,10 @@ void producer(int pipe_fd[2], const char* folder_path) {
                 snprintf(input_file_path, sizeof(input_file_path), "%s/%s", folder_path, ent->d_name);
                 FILE* input_file = fopen(input_file_path, "r");
 
+                
+
                 if (input_file != NULL) {
+                    
                     char buffer[MAX_BUFFER_SIZE];
                     int num_read;
 
@@ -87,15 +92,11 @@ void producer(int pipe_fd[2], const char* folder_path) {
                         closedir(dir);
                     }
 
+                    
+
                     // Notify consumer to create chage their file reference / make the new files
                     sprintf(buffer, "%c%s", NEW_FILE_NAME, inpf);
                     write(pipe_fd[1], buffer, sizeof(buffer));
-
-                    // close old files, making new ones
-                    if (binfFile)
-                        fclose(binfFile);
-                    if (doneFile)
-                        fclose(doneFile);
 
                     // prepare file.binf
                     char binf_file_name[50]; 
@@ -121,10 +122,42 @@ void producer(int pipe_fd[2], const char* folder_path) {
 
 
                         // *** ALL FILES ARE NOW CREATED AND REFERENCED ***
+                    
+                    // Determine which frame to cause error within
+                    FILE *file_len;
+
+                    file_len = fopen(input_file_path, "rb");
+
+                    if (file_len == NULL) {
+                        perror("Error opening input file to count length");
+                        return;
+                    }
+
+                    
+                    // Seek to the end of the file
+                    fseek(file_len, 0, SEEK_END);
+
+                    // current position is number of characters
+                    double length = ftell(file_len);
+                    fclose(file_len);
+
+                    // frames is chars / frame length
+                    int frames = ceil(length / FRAME_LEN);
+
+                    //  Get a random frame
+                    unsigned int seed = (unsigned int)getpid();
+                    srand(seed);
+
+                    // between 0 and frames - 1
+                    int random_frame = rand() % frames;
+                    printf("Malformed frame: %d\n", random_frame + 1);
 
 
+                    int frame_index = 0;
                     // Read the input in chunks of 64, pipe & fork to frame.
                     while ((num_read = fread(buffer, 1, 64, input_file)) > 0) {
+                    
+                     
                         
                         // Create a pipe to communicate with frame.c
                         int frame_pipe[2];
@@ -228,9 +261,64 @@ void producer(int pipe_fd[2], const char* folder_path) {
                                 close(encode_pipe[0]);  // Done reading encode data
 
                                 // Here, we have the encoded_frame!
+
+                                // Simulate transmission error here
+                                // Determine if this frame should be malformed to simulate error
+                                if (frame_index == random_frame)
+                                {
+                                    int malform_pipe[2];
+                                    if (pipe(malform_pipe) == -1) {
+                                        perror("pipe");
+                                        exit(EXIT_FAILURE);
+                                    }
+
+                                    // Attempt to fork so child can exec the subroutine
+                                    fflush(stdout);
+                                    pid_t malform_pid = fork();
+                                    if (malform_pid == -1) {
+                                        perror("fork");
+                                        exit(EXIT_FAILURE);
+                                    }
+                                    // service
+                                    if (malform_pid == 0)
+                                    {
+                                        // Make string versions of the pipe id's to pass to argv
+                                        char malform_read[2]; // Buffer for converting arg1 to a string
+                                        char malform_write[2]; // Buffer for converting arg2 to a string
+
+                                        // Convert integers to strings
+                                        snprintf(malform_read, sizeof(malform_read), "%d", malform_pipe[0]);
+                                        snprintf(malform_write, sizeof(malform_write), "%d", malform_pipe[1]);
+                                        
+                                        // Child process: Call service then die
+                                        execl("malformService", "malformService", malform_read, malform_write, NULL);
+                                        perror("execl");  // If execl fails
+                                        exit(EXIT_FAILURE);
+                                    }
+                                    else //parent
+                                    {
+                                        // Write data to be serviced (the correct encoded frame) through service pipe
+                                        write(malform_pipe[1], encoded_frame, sizeof(encoded_frame));
+                                        close(malform_pipe[1]);  // Done writing frame to be serviced
+
+                                        // When child is done, read result
+                                        wait(NULL);
+
+                                        // Listen for & store malformed frame in previously alocated encoded_frame buff
+                                        read(malform_pipe[0], encoded_frame, sizeof(encoded_frame));
+                                        close(malform_pipe[0]);  // Done reading service data
+
+
+                                    }
+                                }
+                               
                                 // Write the encoded frame to the file, AND to the consumer to decode!
+
+                                // May contain a flipped bit now.
                                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
                                 write(pipe_fd[1], encoded_frame, encoded_len);
+                                
+                            
                       
                             }
                             
@@ -252,6 +340,9 @@ void producer(int pipe_fd[2], const char* folder_path) {
                             // // Write the framed data to the main pipe
                             // write(pipe_fd[1], framed_buffer, framed_length);
                         }
+
+                        // increase frame index
+                        frame_index++;
                     }
 
                     
