@@ -63,6 +63,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     struct dirent* ent;
     FILE *doneFile;
     FILE *binfFile;
+    FILE *frmeFile;
 
     if ((dir = opendir(folder_path)) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
@@ -111,6 +112,17 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     if (binfFile == NULL) {
                         perror("Error opening binf file");
+                        fclose(input_file); // close the input fd to avoid mem leaks
+                        return;
+                    }
+
+                    // prepare file.frme
+                    char frme_file_name[50]; 
+                    snprintf(frme_file_name, sizeof(frme_file_name), "../output/%s/%s.frme", inpf, inpf);
+                    frmeFile = fopen(frme_file_name, "w");
+
+                    if (frmeFile == NULL) {
+                        perror("Error opening frme file");
                         fclose(input_file); // close the input fd to avoid mem leaks
                         return;
                     }
@@ -227,6 +239,9 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             
                             // At this point, we have recieved the frame and can encode it.
                             //printf("%s %d\n", frame, frame_len);
+
+                            // Write frame to .frme for debug
+                            fwrite(frame, sizeof(char), frame_len, frmeFile);
 
                             // Pipe before forking to share a pipe for 
                             // transmission of encoding data
