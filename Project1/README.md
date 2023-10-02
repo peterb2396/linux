@@ -1,5 +1,5 @@
-** This program is a collection of services which simulate the transmission of data. **
-# Add any input text file and observe stages of framing, encoding and so on.
+# This program is a collection of services which simulate the transmission of data.
+### Add any input text file and observe stages of framing, encoding and so on.
 
 
 ## How to run this program
@@ -7,15 +7,15 @@
 2. Run ./app
 
 If you want to edit source code and recompile,
-1. Main app: gcc -o app app.c -lm
-2. Service files: gcc -o <serviceName> <serviceName>.c
+1. Main app: ```gcc -o app app.c -lm```
+2. Service files: ```gcc -o <serviceName> <serviceName>.c```
 
 
 
 ## Getting started with c on linux
-sudo apt update
-sudo apt install gcc
-nano my_program.c OR use IDE
+```sudo apt update```
+```sudo apt install gcc```
+```nano my_program.c``` OR use IDE
 
 ex:
 ```
