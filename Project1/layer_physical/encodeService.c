@@ -3,19 +3,14 @@
 #include <string.h>
 #include <unistd.h>
 
-int main(int argc, char* argv[]) {
+#include "../encDec.h"
 
-    if (argc < 3)
-    {
-        // We are probably just compiling the file, don't run without args
-        return EXIT_FAILURE;
-    }
-    
-    char buffer[67];
-    int encode_pipe[2];
+#define FRAME_LEN 64
 
-    encode_pipe[0] = atoi(argv[1]); // Assign the first integer
-    encode_pipe[1] = atoi(argv[2]); // Assign the second integer
+int encodeFrame(int encode_pipe[2])
+{
+    // Add space for 3 control chars
+    char buffer[FRAME_LEN + 3];
 
     // Read the frame from the producer through the encode pipe
     __ssize_t num_read = read(encode_pipe[0], buffer, sizeof(buffer));
@@ -35,11 +30,27 @@ int main(int argc, char* argv[]) {
             
             write(encode_pipe[1], bit_str, 1);
         }
-        //write(encode_pipe[1], " ", 1); // write space for debugging
-        // if commenting out be sure to change encode buffer size to 67 * 8 in producer
     }
 
     // Finished encoding, close pipe & return
     close(encode_pipe[1]); 
     return EXIT_SUCCESS;
+
+}
+
+int main(int argc, char* argv[]) {
+
+    if (argc < 3)
+    {
+        // We are probably just compiling the file, don't run without args
+        return EXIT_FAILURE;
+    }
+    
+    
+    int encode_pipe[2];
+
+    encode_pipe[0] = atoi(argv[1]); // Assign the first integer
+    encode_pipe[1] = atoi(argv[2]); // Assign the second integer
+
+    return encodeFrame(encode_pipe);
 }

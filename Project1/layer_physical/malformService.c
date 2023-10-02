@@ -3,22 +3,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../encDec.h"
+
+// Start after control characters (3x 8)
 #define L_BOUND 24
 
-// Service to malform the data by flipping one bit of the encoded frame.
-int main(int argc, char* argv[]) {
-
-    if (argc < 3)
-    {
-        // We are probably just compiling the file, don't run without args
-        return EXIT_FAILURE;
-    }
-    
+int malformFrame(int malform_pipe[2])
+{
     char buffer[67 * 8]; // SPace for encoded frame
-    int malform_pipe[2];
-
-    malform_pipe[0] = atoi(argv[1]); // Assign the first integer
-    malform_pipe[1] = atoi(argv[2]); // Assign the second integer
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
@@ -58,4 +50,23 @@ int main(int argc, char* argv[]) {
     // Finished malforming, close pipe & return
     close(malform_pipe[1]); 
     return EXIT_SUCCESS;
+}
+
+
+// Service to malform the data by flipping one bit of the encoded frame.
+int main(int argc, char* argv[]) {
+
+    if (argc < 3)
+    {
+        // We are probably just compiling the file, don't run without args
+        return EXIT_FAILURE;
+    }
+    
+    
+    int malform_pipe[2];
+
+    malform_pipe[0] = atoi(argv[1]); // Assign the first integer
+    malform_pipe[1] = atoi(argv[2]); // Assign the second integer
+
+    return malformFrame(malform_pipe);
 }
