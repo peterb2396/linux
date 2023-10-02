@@ -1,9 +1,20 @@
+How to run this program
+1. Navigate to /layer_application
+2. Run ./app
+
+If you want to edit source code and recompile,
+1. Main app: gcc -o app app.c -lm
+2. Service files: gcc -o <serviceName> <serviceName>.c
+
+
+
 Getting started with c on linux
 sudo apt update
 sudo apt install gcc
 nano my_program.c OR use IDE
 
 ex:
+```
 #include <stdio.h>
 
 int main()
@@ -11,13 +22,18 @@ int main()
     printf("Hello, World!\n");
     return 0;
 }
+```
 
 navigate from terminal to where file is located and compile:
+
+```
 gcc -o my_program my_program.c
+```
 
 Run the program
+```
 ./my_program
-
+```
 
 PIPE NOTES
 Client writes to service pipe then closes write end.
@@ -34,6 +50,7 @@ often caused by failure to close pipe ends or misplaced locations.
 
 EXAMPLE SERVICE:
 
+```
 int service_pipe[2];
 if (pipe(service_pipe) == -1) {
     perror("pipe");
@@ -84,7 +101,7 @@ else //parent
     fwrite(serviced_data, sizeof(char), serviced_data, file);
 
 }
-
+```
 
 
 TRANSMISSION ERRORS
