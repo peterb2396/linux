@@ -7,6 +7,10 @@
 
 #define FRAME_LEN 64
 
+// Takes a data frame and converts to
+// Binary by sending back one char at a time as binary
+// Also adds a parity bit for error detection
+
 int encodeFrame(int encode_pipe[2])
 {
     // Add space for 3 control chars

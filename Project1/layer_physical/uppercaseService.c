@@ -8,6 +8,10 @@
 
 #define FRAME_LEN 64
 
+
+// Writes back the provided data frame
+// with all characters in uppercase form
+
 int toUpperFrame(int uppercase_pipe[2])
 {
     // Add space for \0 character

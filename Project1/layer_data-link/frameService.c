@@ -8,6 +8,8 @@
 
 #define FRAME_LEN 64
 
+// Read incoming data chunk and write back
+// version with 3 control characters added
 int frameChunk(int frame_pipe[2])
 {
     // Include space for \0

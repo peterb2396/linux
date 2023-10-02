@@ -19,6 +19,8 @@ int power(int base, int exp) {
     return result;
 }
 
+// Takes an encoded binary frame through the pipe and
+// returns the characters for each byte.
 int decodeFrame(int decode_pipe[2])
 {
     // Add space for the data and 3 control bytes * 8 bits for each

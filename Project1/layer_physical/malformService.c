@@ -8,6 +8,9 @@
 // Start after control characters (3x 8)
 #define L_BOUND 24
 
+// Malforms a provided data frame by choosing
+// a random bit within it and flipping it.
+
 int malformFrame(int malform_pipe[2])
 {
     char buffer[67 * 8]; // SPace for encoded frame

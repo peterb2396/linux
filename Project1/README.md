@@ -4,7 +4,7 @@
 
 ## How to run this program
 1. Navigate to /layer_application
-2. Run ./app
+2. Run ```./app```
 
 If you want to edit source code and recompile,
 1. Main app: ```gcc -o app app.c -lm```

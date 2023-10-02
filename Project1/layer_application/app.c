@@ -18,16 +18,19 @@
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path);
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]);
 
-
+// Will fork to seperate processes for Producer and Consumer
+// Beforehand, creates one pipe each way to go between the two.
 int main() {
     int ptoc_pipe[2]; //producer to consumer
     int ctop_pipe[2]; //consumer to producer
     
+    // Pipe & catch errors
     if (pipe(ptoc_pipe) == -1 || pipe(ctop_pipe) == -1) {
         perror("pipe");
         exit(EXIT_FAILURE);
     }
 
+    // Fork process
     pid_t child_pid = fork();
 
     if (child_pid == -1) {
@@ -58,6 +61,8 @@ int main() {
     return 0;
 }
 
+// Producer is responsible for reading and preparing input,
+// sending it to consumer which will modify it
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     DIR* dir;
     struct dirent* ent;
@@ -65,6 +70,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     FILE *binfFile;
     FILE *frmeFile;
 
+    // For each file in the input directory...
     if ((dir = opendir(folder_path)) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
@@ -72,10 +78,9 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                 snprintf(input_file_path, sizeof(input_file_path), "%s/%s", folder_path, ent->d_name);
                 FILE* input_file = fopen(input_file_path, "r");
 
-                
-
                 if (input_file != NULL) {
                     
+                    // Prepare a buffer to read a chunk of data from the input
                     char buffer[FRAME_LEN + 1];
                     int num_read;
 
@@ -142,6 +147,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                         // *** ALL FILES ARE NOW CREATED AND REFERENCED ***
                     
                     // Determine which frame to cause error within
+                    // This is to simulate a transmission error as described in README
                     FILE *file_len;
 
                     file_len = fopen(input_file_path, "rb");
@@ -151,7 +157,6 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                         return;
                     }
 
-                    
                     // Seek to the end of the file
                     fseek(file_len, 0, SEEK_END);
 
@@ -197,7 +202,9 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             char frame_read[10]; // Buffer for converting arg1 to a string
                             char frame_write[10]; // Buffer for converting arg2 to a string
 
-                            // Convert integers to strings
+                            // Convert FD integers to strings
+                            // so they can be passed as args
+
                             snprintf(frame_read, sizeof(frame_read), "%d", frame_pipe[0]);
                             snprintf(frame_write, sizeof(frame_write), "%d", frame_pipe[1]);
                             
@@ -223,7 +230,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             // Parent reads result from the child process (the new frame)
                             char frame[68]; // The frame to be recieved will be stored here
 
-                            // Listen for frame result
+                            // Read frame result
                             int frame_len = read(frame_pipe[0], frame, sizeof(frame));
                             close(frame_pipe[0]);  // Close the read end of the frame pipe
 
@@ -238,7 +245,6 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             }
                             
                             // At this point, we have recieved the frame and can encode it.
-                            //printf("%s %d\n", frame, frame_len);
 
                             // Write frame to .frme for debug
                             fwrite(frame, sizeof(char), frame_len, frmeFile);
@@ -292,9 +298,9 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 
 
                                 // Parent reads result from the child process (the encoded frame)
-                                char encoded_frame[67 * 8]; // The encoded frame
-                                    // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-
+                                // Add space for control chars and bit conversion
+                                char encoded_frame[(FRAME_LEN + 3) * 8]; // The encoded frame
+                                    
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
                                 close(encode_pipe[0]);  // Done reading encode data
@@ -408,9 +414,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                     waitpid(decode_pid, NULL, 0);;
                                     
                                     // Parent reads result from the child process (the decoded frame)
-                                    char decoded_frame[67]; // The decoded frame is 1/8 the size
-                                        // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-
+                                    char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
+                                     
                                     // Listen for & store decoded frame
                                     int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
                                     close(decode_pipe[0]);  // Done reading encode data
@@ -453,7 +458,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                                         // When child is done, read chunk (ctrl chars removed)
                                         waitpid(deframe_pid, NULL, 0);;
-                                        char chunk[70]; // The frame to be recieved will be stored here
+                                        char chunk[FRAME_LEN + 1]; // The frame to be recieved will be stored here
 
                                         int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
                                         close(deframe_pipe[0]); 
@@ -474,28 +479,15 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                     }
                                         
                                     
-                                }// end sec
+                                }// end section write-back to consumer
                                 
                                 
-                      
                             }
 
-                            
-                            
-                            
-
                         }
-                        
-                        
-                        
-                        
                         // increase frame index
                         frame_index++;
                     }
-
-                    
-
-                    
 
                     fclose(input_file);
                 } else {
@@ -510,9 +502,10 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
     // Signal the end of processing to the consumer
     close(ptoc_pipe[1]);
-    close(ctop_pipe[0]); //?
+    close(ctop_pipe[0]);
 }
 
+// Responsible for recieving data and modifying it, then sending back
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     
     // Define file pointers
@@ -521,8 +514,6 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
 
     char message[67 * 8]; // encoded stream (usually) from main pipe
     char *inpf;           // name of input file currently being processed
-
-    
 
     while (1) {
         ssize_t bytes_read = read(ptoc_pipe[0], message, sizeof(message));
@@ -706,7 +697,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
 
                         // When child is done, read chunk (capitalized)
                         waitpid(uppercase_pid, NULL, 0);
-                        char cap_chunk[66]; // The capital chunk
+                        char cap_chunk[FRAME_LEN + 2]; // The capital chunk
                         int cap_chunk_len = read(uppercase_pipe[0], cap_chunk, sizeof(cap_chunk));
                         close(uppercase_pipe[0]); 
                         
@@ -772,8 +763,6 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                                 }
                             }
                             // At this point, we have recieved the frame and can encode it.
-                            //printf("%s %d\n", frame, frame_len);
-
                             // Pipe before forking to share a pipe for 
                             // transmission of encoding data
                             int encode_pipe[2];
@@ -815,9 +804,8 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                                 waitpid(encode_pid, NULL, 0);
 
                                 // Parent reads result from the child process (the encoded frame)
-                                char encoded_frame[67 * 8]; // The encoded frame
-                                    // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-
+                                char encoded_frame[(FRAME_LEN + 3) * 8]; // The encoded frame
+                             
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
                                 close(encode_pipe[0]);  // Done reading encode data
