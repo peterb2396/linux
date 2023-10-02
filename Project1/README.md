@@ -13,11 +13,11 @@ If you want to edit source code and recompile,
 
 
 ## Getting started with c on linux
-```sudo apt update```
-```sudo apt install gcc```
-```nano my_program.c``` OR use IDE
+1. ```sudo apt update```
+2. ```sudo apt install gcc```
+3. ```nano my_program.c``` OR use IDE
 
-ex:
+Hello World example:
 ```
 #include <stdio.h>
 
