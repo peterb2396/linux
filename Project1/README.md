@@ -1,4 +1,8 @@
-How to run this program
+** This program is a collection of services which simulate the transmission of data. **
+# Add any input text file and observe stages of framing, encoding and so on.
+
+
+## How to run this program
 1. Navigate to /layer_application
 2. Run ./app
 
@@ -8,7 +12,7 @@ If you want to edit source code and recompile,
 
 
 
-Getting started with c on linux
+## Getting started with c on linux
 sudo apt update
 sudo apt install gcc
 nano my_program.c OR use IDE
@@ -24,7 +28,7 @@ int main()
 }
 ```
 
-navigate from terminal to where file is located and compile:
+Navigate from terminal to where file is located and compile:
 
 ```
 gcc -o my_program my_program.c
@@ -35,7 +39,7 @@ Run the program
 ./my_program
 ```
 
-PIPE NOTES
+## PIPE NOTES
 Client writes to service pipe then closes write end.
 Client waits for service to terminate
 Client reads from pipe
@@ -48,7 +52,7 @@ Service terminates
 Deadlock will occur if two processes are waiting on each other to read/write,
 often caused by failure to close pipe ends or misplaced locations.
 
-EXAMPLE SERVICE:
+## EXAMPLE SERVICE:
 
 ```
 int service_pipe[2];
