@@ -8,6 +8,8 @@
 
 #define FRAME_LEN 64
 
+// Service to read a frame and write back the original
+// data without two SYN chars and length character
 int deframeFrame(int deframe_pipe[2])
 {
     // Add space for 3 control characters and \0
@@ -15,7 +17,7 @@ int deframeFrame(int deframe_pipe[2])
     char* chunk = &buffer[3]; // Will point to actual content ignoring control chars
 
     // Read the framed chunk from the producer through the deframe pipe
-    // ex of incoming stream: SS@Hello, World!
+    // ex of incoming stream: (SYN)(SYN)(CR)Hello, World!
     __ssize_t num_read = read(deframe_pipe[0], buffer, sizeof(buffer));
     close(deframe_pipe[0]);
     // Send the deframed chunk through the pipe. It will be 3 chars shorter than input.

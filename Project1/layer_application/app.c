@@ -279,7 +279,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 snprintf(encode_read, sizeof(encode_read), "%d", encode_pipe[0]);
                                 snprintf(encode_write, sizeof(encode_write), "%d", encode_pipe[1]);
                                 
-                                // Child process: Call encode then die
+                                // Child process: Call encode then dieencode_pip
                                 execl("../layer_physical/encodeService", "encodeService", encode_read, encode_write, NULL);
                                 perror("execl");  // If execl fails
                                 exit(EXIT_FAILURE);
