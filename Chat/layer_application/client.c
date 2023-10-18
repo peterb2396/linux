@@ -9,7 +9,7 @@
 #define MAX_NAME_LENGTH 50
 #define MAX_PASS_LENGTH 50
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 12346
+#define SERVER_PORT 12344
 
 void receiveMessages(int server_socket);
 void sendMessages(int server_socket);
@@ -50,7 +50,7 @@ int main() {
     }
     
     // Process sendMessages or recieveMessages quit, usually a failure or exit
-    printf("Shutting down connection");
+
     close(server_socket);
     return 0;
 }
@@ -81,6 +81,7 @@ void sendMessages(int server_socket)
         // Check if the user wants to exit
         if (strcmp(message, "exit") == 0) {
             printf("Exiting...\n");
+            send(server_socket, message, strlen(message), 0); // Send 0 bytes to signify disconnect
             break;
         }
 
@@ -90,30 +91,55 @@ void sendMessages(int server_socket)
             perror("Error sending message to the server");
             break;
         }
+
+        
     }
 
 }
 
-void receiveMessages(int server_socket)
-{
-    while(1)
-    {
-        // Communication loop: wait for a message from the server, and display it
-        char buffer[5000];
-        memset(buffer, 0, sizeof(buffer));
+void receiveMessages(int server_socket) {
+    
+
+    while (1) {
+        char buffer2[5000];
+        char *tag = NULL;
+        char *message = NULL;
+
+        memset(buffer2, 0, sizeof(buffer2));
 
         // Receive a message from the server
-        ssize_t bytesRead = recv(server_socket, buffer, sizeof(buffer) - 1, 0);
+        ssize_t bytesRead = recv(server_socket, buffer2, sizeof(buffer2), 0);
 
         if (bytesRead == -1) {
             perror("Error receiving data from the server");
-            exit(1);
+            exit(EXIT_FAILURE);
         } else if (bytesRead == 0) {
             printf("Server has closed the connection. Exiting...\n");
-            break;
+            exit(EXIT_FAILURE);
         } else {
-            // Print the received message
-            printf("%s\n", buffer);
+            char *start = strchr(buffer2, '<');
+            char *end = strchr(buffer2, '>');
+
+            if (start && end && end > start) {
+                *end = '\0';
+                tag = start + 1;
+                start = end + 1;
+                end = strstr(start, "</");
+                if (end) {
+                    *end = '\0';
+                    message = start;
+                } else {
+                    // Handle case where there's no closing tag
+                    message = start;
+                }
+            } else {
+                // If no tag found, set tag to NULL
+                tag = NULL;
+                message = buffer2;
+            }
+
+            printf("%s\n", message);
+            fflush(stdout);
         }
     }
 }
