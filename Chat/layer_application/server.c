@@ -42,6 +42,8 @@ void sendUserNamesToClient(int clientSocket);
 void clientConnected(int client_socket, char* username);
 void clientDisconnected(int client_socket);
 Client findClientBySocket(int socket);
+Client findClientByName(char* name);
+void modifyClient(Client newClient);
 
 int main() {
     int server_socket, client_socket, port;
@@ -307,7 +309,7 @@ void sendUserNamesToClient(int clientSocket) {
 
     fclose(file);
 
-    if (numUsers == 0)
+    if (numUsers == 1)
     {
         // Send message that no users exist.
         // We will notify you when they do.
@@ -355,16 +357,63 @@ void sendUserNamesToClient(int clientSocket) {
             if (index >= 1 && index <= numUsers) {
                 valid_res = 1;
 
-                // Get this client by socket
+                // Get this client by socket, and its recipient by name
                 Client client = findClientBySocket(clientSocket);
+                Client recip_client = findClientByName(usernames[index - 1]);
+
+                
 
                 // Set the client's recip_name to this
-                strncpy(client.recip_name, usernames[index - 1], strlen(usernames[index - 1]));
+                strncpy(client.recip_name, usernames[index - 1], sizeof(usernames[index - 1]));
+                client.recip_name[sizeof(client.recip_name) - 1] = '\0';
+
+                modifyClient(client);
+
+                // Send with <INFO> the chat history to client.socket
+                // Note ACK is necessary
+
                 
-                // Send you are now chatting message
-                char message[29 + strlen(usernames[index - 1])];
-                snprintf(message, sizeof(message), "You are now chatting with %s", usernames[index - 1]);
-                send(clientSocket, message, strlen(message), 0);
+
+                // Link users together, or notify that the other user is not online.
+                // Messages can always be sent even if other user is offline,
+                // But the message just goes straight to the chat history until user comes online
+          
+                if (strcmp(client.name, recip_client.recip_name) == 0)
+                { // We are trying to chat with each other
+
+                    // Send you are now chatting message
+                    char message[38 + strlen(usernames[index - 1])];
+                    snprintf(message, sizeof(message), "* You are now chatting with %s (ONLINE)", usernames[index - 1]);
+                    send(client.socket, message, strlen(message), 0);
+
+                    // We are both trying to chat with each other. Link the sockets
+                    client.recip_socket = recip_client.socket;
+                    recip_client.recip_socket = client.socket;
+
+
+                    // Tell the other client that I just came online.
+                    char message2[24 + strlen(client.name)];
+                    snprintf(message2, sizeof(message2), "* %s is now ONLINE", client.name);
+                    send(client.recip_socket, message2, strlen(message2), 0);
+
+                }
+                else
+                {
+                    // This user was not waiting to chat for me
+                    // Send you are now chatting message
+                    char message[39 + strlen(usernames[index - 1])];
+                    snprintf(message, sizeof(message), "* You are now chatting with %s (OFFLINE)", usernames[index - 1]);
+                    send(client.socket, message, strlen(message), 0);
+
+                    // I am in the chat room alone, I can not set my recip socket.
+                    // When they come online and join the chat, the above chain will execute
+                    // and set each parties recip_socket to allow msgs to be forwarded.
+                }
+
+                // Update the copies of the clients back into the array
+                modifyClient(client);
+                modifyClient(recip_client);
+
             } else {
                 // Handle an invalid index
                 send(clientSocket, "Invalid index", strlen("Invalid index"), 0);
@@ -386,21 +435,23 @@ void clientDisconnected(int client_socket)
     int indexToRemove = -1;
     
     // Find users who were chatting with this user
-    for (int i = 0; i < MAX_USERS; i++) {
+    for (int i = 0; i < num_users; i++) {
         if (active_users[i].recip_socket == client_socket) {
             // Invalidate recip socket, msg can not be fwd
             active_users[i].recip_socket = -1;
 
             // notify anyone chatting with this client (sockfd) that the user logged off
-            send(active_users[i].socket, ("[INFO] %s has left the chat.", active_users[i].recip_name), 29, 0);
+            char message[256];
+            snprintf(message, sizeof(message), "* %s is now OFFLINE.", active_users[i].recip_name);
+            send(active_users[i].socket, message, sizeof(message), 0);
 
-            // Invalidate recip name, it is meaningless
-            strncpy(active_users[i].recip_name, "", MAX_NAME_LENGTH);
+            // Note that this user's recipient name does not become invalidated, because 
+            // They are still viewing the chat window, and we must keep it to reconnect
         }
     }
 
     // Find the user who just left (to remove them from active array)
-    for (int i = 0; i < MAX_USERS; i++) {
+    for (int i = 0; i < num_users; i++) {
         if (active_users[i].socket == client_socket) {
             indexToRemove = i;
             printf("Client %s has disconnected.\n", active_users[i].name);
@@ -427,29 +478,16 @@ void clientConnected(int client_socket, char* username)
     strncpy(newClient.name, username, sizeof(newClient.name) - 1);
     newClient.name[sizeof(newClient.name) - 1] = '\0'; // Null-terminate the string
     newClient.recip_socket = -1;  // Set recip_socket to -1
-    strncpy(newClient.recip_name, "", MAX_NAME_LENGTH);  // Set recip_name
+    strncpy(newClient.recip_name, "0default", MAX_NAME_LENGTH);  // Set recip_name
 
     // add client to active user list
     active_users[num_users++] = newClient;
-    
-    // Find users who are chatting with this user
-    for (int i = 0; i < MAX_USERS; i++) {
-        if (strcmp(active_users[i].recip_name, username) == 0)
-        {
-            // Set the recip socket for this user so now the messages can fwd
-            active_users[i].recip_socket = client_socket;
-            // Recip_name is already set (thats how we located this user)
-        
-            // notify anyone chatting with this client (sockfd) that the user logged off
-            send(active_users[i].socket, ("[INFO] %s has joined the chat.", username), 31, 0);
-        }
-    }
 
     printf("Client %s has connected!\n", username);
 }
 
 Client findClientBySocket(int socket) {
-    for (int i = 0; i < MAX_USERS; i++) {
+    for (int i = 0; i < num_users; i++) {
         if (active_users[i].socket == socket) {
             // Return the Client structure when a matching socket is found
             return active_users[i];
@@ -461,4 +499,31 @@ Client findClientBySocket(int socket) {
     emptyClient.socket = -1; 
     
     return emptyClient;
+}
+
+// Find a client given their name
+Client findClientByName(char* name) {
+    for (int i = 0; i < num_users; i++) {
+        
+        if (strcmp(name, active_users[i].name) == 0) {
+            // Return the Client structure when a matching name found
+            return active_users[i];
+        }
+    }
+
+    // If no matching socket is found, return a default/empty Client structure
+    Client emptyClient;
+    emptyClient.socket = -1; 
+    
+    return emptyClient;
+}
+
+// Update a provided client
+void modifyClient(Client newClient) {
+    for (int i = 0; i < num_users; i++) {
+        if (strcmp(active_users[i].name, newClient.name) == 0) {
+            active_users[i] = newClient;
+            return;
+        }
+    }
 }
