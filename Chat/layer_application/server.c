@@ -10,11 +10,26 @@
 #define MAX_USERS 100
 #define MAX_NAME_LENGTH 10
 #define MAX_PASS_LENGTH 20
-#define PORT 12344
+#define PORT 12345
 
+// TODO: Implement this Client.
+// Implement display users when new user registers to all not in a chat
+// How to send message? <MSG><FROM>c1</FROM><TO>c2></TO><BODY>hi</BODY></MSG>
+// Above is not necessary. We know the client easily, so just need to set his
+// recip name and socket, when they choose a recipient name look here for its socket.
+// NOTE recip socket can be undefined in which client is offline, msg will not fwd
+
+// Then when chat, we can easily find the source and destination
+// Simply update the file for chats/source/dest.txt
+// AND, update the file for chats/dest/source.txt
+// THEN fwd the msg by printing it on the dest client IFF they are online (sockfd valid)
+
+// Seperately, when a client connects to a chat, load the chat file to stdout.
 typedef struct {
     int socket;
     char name[MAX_NAME_LENGTH];
+    int recip_socket; // Who am i chatting with? When a display is called, ignore if this is valid (im already in a chat!)
+    char recip_name[MAX_NAME_LENGTH]; // What is their name?
 } Client;
 
 Client active_users[MAX_USERS];
@@ -46,8 +61,12 @@ int main() {
     server_addr.sin_port = htons(PORT);
 
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Error binding server socket");
-        exit(1);
+        server_addr.sin_port = htons(PORT + 1);
+        if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+            perror("Error binding server socket");
+            exit(1);
+        }
+        
     }
 
     // Listen
@@ -56,8 +75,9 @@ int main() {
         exit(1);
     }
 
-    printf("Server listening on port %d\n", PORT);
+    printf("Server listening on port %d\n", server_addr.sin_port);
     fflush(stdout);
+    
 
     while (1) {
         // Accept a new connection
@@ -66,6 +86,8 @@ int main() {
             perror("Error accepting client connection");
             continue;
         }
+    
+        
 
         // Create a new thread to handle the client
         pthread_t thread;
@@ -85,7 +107,6 @@ void* handle_client(void* arg) {
     char password[MAX_PASS_LENGTH];
     char buffer[1024];
 
-
     int authed; // Is this client logged in
 
     // Prompt the client for login or register until they're authenticated
@@ -97,11 +118,15 @@ void* handle_client(void* arg) {
         send(client_socket, "1. Login\n2. Register\nEnter your choice: ", 41, 0);
         int choice;
 
+
         memset(buffer, 0, sizeof(buffer));
+
 
         // Receive the index from the client
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
+        
+        
 
         if (strcmp(buffer, "exit") == 0) 
         {
@@ -111,16 +136,24 @@ void* handle_client(void* arg) {
 
         choice = atoi(buffer); // Convert ascii code to actual int choice
 
+        
+
         if (choice == 1) {
             // Handle login
-            send(client_socket, "Enter username: ", 17, 0);
+            int res = send(client_socket, "Enter username: ", 17, 0);
             recv(client_socket, username, MAX_NAME_LENGTH, 0);
             send(client_socket, "Enter password: ", 17, 0);
             recv(client_socket, password, MAX_PASS_LENGTH, 0);
 
             if (authenticate_user(client_socket, username, password)) {
                 authed = 1;
-                send(client_socket, ("Welcome back, %s! Choose a recipient:\n", username), 46, 0);
+
+                // Prep and send welcome prompt
+                char message[MAX_NAME_LENGTH + 51];
+
+                // ** Require ACK for the below, because another send() will immediately follow!
+                snprintf(message, sizeof(message), "<INFO>Welcome back, %s! Choose a recipient:</INFO>", username);
+                send(client_socket, message, sizeof(message), 0);
             } else {
                 // Login failed
                 send(client_socket, "Login failed. Please try again.\n", 32, 0);
@@ -137,7 +170,7 @@ void* handle_client(void* arg) {
             if (register_user(client_socket, username, password)) {
                 // Registration successful
                 authed = 1;
-                send(client_socket, ("Welcome, %s! Choose a recipient:\n", username), 54, 0);
+                send(client_socket, ("<INFO>Welcome, %s! Choose a recipient:</INFO>", username), 54, 0);
             } else {
                 // Registration failed
                 send(client_socket, "Registration failed. Please try again.\n", 38, 0);
@@ -253,12 +286,21 @@ void sendUserNamesToClient(int clientSocket) {
 
             // Send username as an option
             char message[MAX_NAME_LENGTH + 32];
-            memset(message, 0, strlen(message));
+            memset(message, 0, sizeof(message));
             
             snprintf(message, sizeof(message), "<LOGIN_LIST>%d. %s</LOGIN_LIST>", ++numUsers, user);
-            //printf("%s\n", message);
-            // send(clientSocket, message, strlen(message), 0);
-            // printf("%d, %s\n", res, message);
+       
+            // Do the below before the server sends any data! (if sent rapidly)
+            char res[2];
+            recv(clientSocket, res, 1, 0); // Block until we get ACK
+
+            // These send()s all fired before recv() finishes.
+            // So, the subsequent send()s were ignored.
+            // To fix, I added the above wait for ACK.
+            send(clientSocket, message, sizeof(message), 0);
+
+            
+
         }   
     }
 
@@ -294,6 +336,12 @@ void sendUserNamesToClient(int clientSocket) {
             clientDisconnected(clientSocket);
             return;
         } 
+        else if (strcmp(buffer, "6") == 0) 
+        {
+            // Ignore this, it is just ACK
+            continue;
+        }
+
         else if (strcmp(buffer, "exit") == 0) 
         {
             clientDisconnected(clientSocket);

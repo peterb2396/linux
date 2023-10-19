@@ -6,10 +6,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#define MAX_NAME_LENGTH 50
-#define MAX_PASS_LENGTH 50
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 12344
+#define SERVER_PORT 12345
 
 void receiveMessages(int server_socket);
 void sendMessages(int server_socket);
@@ -31,8 +29,12 @@ int main() {
     server_addr.sin_port = htons(SERVER_PORT);
 
     if (connect(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Error connecting to the server");
-        exit(1);
+        server_addr.sin_port = htons(SERVER_PORT + 1);
+        // First port failed, try the next one
+        if (connect(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+            perror("Error connecting to the server");
+            exit(1);
+        }
     }
 
     pid_t child_pid = fork();
@@ -98,9 +100,9 @@ void sendMessages(int server_socket)
 }
 
 void receiveMessages(int server_socket) {
-    
-
     while (1) {
+        
+
         char buffer2[5000];
         char *tag = NULL;
         char *message = NULL;
@@ -110,13 +112,17 @@ void receiveMessages(int server_socket) {
         // Receive a message from the server
         ssize_t bytesRead = recv(server_socket, buffer2, sizeof(buffer2), 0);
 
+        
+
         if (bytesRead == -1) {
-            perror("Error receiving data from the server");
-            exit(EXIT_FAILURE);
+                perror("Error receiving data from the server");
+                exit(EXIT_FAILURE);
+            
         } else if (bytesRead == 0) {
             printf("Server has closed the connection. Exiting...\n");
             exit(EXIT_FAILURE);
-        } else {
+        } 
+            else {
             char *start = strchr(buffer2, '<');
             char *end = strchr(buffer2, '>');
 
@@ -138,8 +144,27 @@ void receiveMessages(int server_socket) {
                 message = buffer2;
             }
 
+            // Show the client the message from the server, without the tags
             printf("%s\n", message);
             fflush(stdout);
+
+            
+
+            // I processed the message, i am ready for the next
+            // Only send on certain tags, like <LOGIN_LIST> where multi data is processed.
+            // Otherwise, if the server is in a feedback loop, this will just cause infinite loop
+
+            if (tag && (strcmp(tag, "LOGIN_LIST") == 0 || strcmp(tag, "INFO") == 0))
+            {
+                fflush(stdout);
+                // I acknowledge the first item was recieved, ready for the next
+                char* ACK = "6";  // ASCII code ACK
+                send(server_socket, ACK, 1, 0);
+            }
+            
         }
+
+        
+        
     }
 }

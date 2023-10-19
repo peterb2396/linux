@@ -28,6 +28,12 @@ int main()
 }
 ```
 
+Finding and killing locking port
+```
+lsof -i tcp:PORT
+kill -3 PID
+```
+
 Navigate from terminal to where file is located and compile:
 
 ```
