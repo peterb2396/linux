@@ -119,9 +119,16 @@ void receiveMessages(int server_socket) {
                 exit(EXIT_FAILURE);
             
         } else if (bytesRead == 0) {
-            printf("Server has closed the connection. Exiting...\n");
-            exit(EXIT_FAILURE);
-        } 
+            // Disconnected by server
+            exit(EXIT_SUCCESS);
+        }
+        else if (strcmp(buffer2, "0") == 0) 
+        {
+            // Server is asking this client to refresh their list.
+            // Client must now send request to refresh the list.
+            send(server_socket, "0", 2, 0);
+
+        }
             else {
             char *start = strchr(buffer2, '<');
             char *end = strchr(buffer2, '>');
@@ -158,8 +165,8 @@ void receiveMessages(int server_socket) {
             {
                 fflush(stdout);
                 // I acknowledge the first item was recieved, ready for the next
-                char* ACK = "6";  // ASCII code ACK
-                send(server_socket, ACK, 1, 0);
+                //char* ACK = "6";  // ASCII code ACK
+                send(server_socket, "|", 1, 0);
             }
             
         }

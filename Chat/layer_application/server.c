@@ -12,6 +12,10 @@
 #define MAX_PASS_LENGTH 20
 #define PORT 12345
 
+// TODO:
+// Dont allow user to chat with themselves
+// Investigate seg fault in double digit clients?
+
 // TODO: Implement this Client.
 // Implement display users when new user registers to all not in a chat
 // How to send message? <MSG><FROM>c1</FROM><TO>c2></TO><BODY>hi</BODY></MSG>
@@ -150,13 +154,6 @@ void* handle_client(void* arg) {
 
             if (authenticate_user(client_socket, username, password)) {
                 authed = 1;
-
-                // Prep and send welcome prompt
-                char message[MAX_NAME_LENGTH + 51];
-
-                // ** Require ACK for the below, because another send() will immediately follow!
-                snprintf(message, sizeof(message), "<INFO>Welcome back, %s! Choose a recipient:</INFO>", username);
-                send(client_socket, message, sizeof(message), 0);
             } else {
                 // Login failed
                 send(client_socket, "Login failed. Please try again.\n", 32, 0);
@@ -173,7 +170,6 @@ void* handle_client(void* arg) {
             if (register_user(client_socket, username, password)) {
                 // Registration successful
                 authed = 1;
-                send(client_socket, ("<INFO>Welcome, %s! Choose a recipient:</INFO>", username), 54, 0);
             } else {
                 // Registration failed
                 send(client_socket, "Registration failed. Please try again.\n", 38, 0);
@@ -264,6 +260,17 @@ int register_user(int client_socket, char* username, char* password) {
     // Add to the active users list, notify server of login
     clientConnected(client_socket, username);
 
+    //Notify all users who are not in a chat that a new user option is available
+    for(int i = 0; i < num_users; i++)
+    {
+        Client client = active_users[i];
+        if (strlen(client.recip_name) == 0)
+        {
+            send(client.socket, "0", 2, 0); // Trigger refresh list
+            
+        }
+    }
+
     fclose(file);
     return 1;
 }
@@ -280,6 +287,14 @@ void sendUserNamesToClient(int clientSocket) {
     char *usernames[MAX_USERS];  // Array to store usernames
     int numUsers = 0;
 
+    // Find the client
+    Client client = findClientBySocket(clientSocket);
+
+    // Send and wait for ACK below
+    char message[strlen(client.name) + 46];
+    snprintf(message, sizeof(message), "<INFO>Welcome, %s! Choose a recipient:</INFO>", client.name);
+    send(client.socket, message, sizeof(message), 0);
+
     // Read, display, and store usernames from the file
     char line[MAX_NAME_LENGTH + MAX_PASS_LENGTH + 1];
     while (numUsers < MAX_USERS && fgets(line, sizeof(line), file)) {
@@ -293,9 +308,9 @@ void sendUserNamesToClient(int clientSocket) {
             
             snprintf(message, sizeof(message), "<LOGIN_LIST>%d. %s</LOGIN_LIST>", ++numUsers, user);
        
-            // Do the below before the server sends any data! (if sent rapidly)
+            // Here we are waiting for ACK
             char res[2];
-            recv(clientSocket, res, 1, 0); // Block until we get ACK
+            recv(clientSocket, res, 2, 0); // Block until we get ACK
 
             // These send()s all fired before recv() finishes.
             // So, the subsequent send()s were ignored.
@@ -315,9 +330,6 @@ void sendUserNamesToClient(int clientSocket) {
         // We will notify you when they do.
 
         send(clientSocket, "No users exist yet!\nWill notify you when they do...\n", 53, 0);
-
-        // Note call this function each time a new client registers, for all clients
-        // who are not in an active chat
     }
 
     // Listen for client response
@@ -326,6 +338,7 @@ void sendUserNamesToClient(int clientSocket) {
     {
         char buffer[2];
         int index;
+
 
         memset(buffer, 0, sizeof(buffer));
 
@@ -339,10 +352,36 @@ void sendUserNamesToClient(int clientSocket) {
             clientDisconnected(clientSocket);
             return;
         } 
-        else if (strcmp(buffer, "6") == 0) 
+        else if (strcmp(buffer, "|") == 0) 
         {
             // Ignore this, it is just ACK
             continue;
+        }
+
+        // Client requested refresh
+        else if (strcmp(buffer, "0") == 0) 
+        {
+            // Get the client
+            Client client = findClientBySocket(clientSocket);
+
+            // Refresh the list for this client
+            // Clear the terminal
+            for (int j = 0; j < 10; j++)
+            {
+                char message[15];
+                snprintf(message, sizeof(message), "<INFO>\n</INFO>");
+
+                char res[2];
+                recv(client.socket, res, 1, 0); // Block until we get ACK    
+                send(client.socket, message, sizeof(message), 0);
+            }
+
+            
+            // Display the names
+            sendUserNamesToClient(client.socket);
+            
+
+            continue; // Loop again once printed
         }
 
         else if (strcmp(buffer, "exit") == 0) 
@@ -416,7 +455,18 @@ void sendUserNamesToClient(int clientSocket) {
 
             } else {
                 // Handle an invalid index
-                send(clientSocket, "Invalid index", strlen("Invalid index"), 0);
+                if (index == 0)
+                {
+                    // Disconnect
+                    clientDisconnected(clientSocket);
+
+                }
+                else{
+                    snprintf(message, sizeof(message), "Invalid choice: %d\n", index);
+                    send(client.socket, message, strlen(message), 0);
+                }
+                char message[50];
+                
             }
         }
         
@@ -478,7 +528,7 @@ void clientConnected(int client_socket, char* username)
     strncpy(newClient.name, username, sizeof(newClient.name) - 1);
     newClient.name[sizeof(newClient.name) - 1] = '\0'; // Null-terminate the string
     newClient.recip_socket = -1;  // Set recip_socket to -1
-    strncpy(newClient.recip_name, "0default", MAX_NAME_LENGTH);  // Set recip_name
+    strncpy(newClient.recip_name, "", MAX_NAME_LENGTH);  // Set recip_name
 
     // add client to active user list
     active_users[num_users++] = newClient;
