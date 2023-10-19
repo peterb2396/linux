@@ -7,7 +7,7 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-#define MAX_USERS 100
+#define MAX_USERS 10
 #define MAX_NAME_LENGTH 10
 #define MAX_PASS_LENGTH 20
 #define PORT 12345
@@ -27,9 +27,9 @@
 // Seperately, when a client connects to a chat, load the chat file to stdout.
 typedef struct {
     int socket;
-    char name[MAX_NAME_LENGTH];
+    char name[MAX_NAME_LENGTH + 1]; // Allow null terminator
     int recip_socket; // Who am i chatting with? When a display is called, ignore if this is valid (im already in a chat!)
-    char recip_name[MAX_NAME_LENGTH]; // What is their name?
+    char recip_name[MAX_NAME_LENGTH + 1]; // What is their name?
 } Client;
 
 Client active_users[MAX_USERS];
@@ -41,6 +41,7 @@ int register_user(int client_socket, char* username, char* password);
 void sendUserNamesToClient(int clientSocket);
 void clientConnected(int client_socket, char* username);
 void clientDisconnected(int client_socket);
+Client findClientBySocket(int socket);
 
 int main() {
     int server_socket, client_socket, port;
@@ -352,8 +353,15 @@ void sendUserNamesToClient(int clientSocket) {
             index = atoi(buffer);
 
             if (index >= 1 && index <= numUsers) {
-                // Send the corresponding username to the client
                 valid_res = 1;
+
+                // Get this client by socket
+                Client client = findClientBySocket(clientSocket);
+
+                // Set the client's recip_name to this
+                strncpy(client.recip_name, usernames[index - 1], strlen(usernames[index - 1]));
+                
+                // Send you are now chatting message
                 char message[29 + strlen(usernames[index - 1])];
                 snprintf(message, sizeof(message), "You are now chatting with %s", usernames[index - 1]);
                 send(clientSocket, message, strlen(message), 0);
@@ -374,17 +382,83 @@ void sendUserNamesToClient(int clientSocket) {
 
 void clientDisconnected(int client_socket)
 {
-    printf("Client has disconnected.\n");
-    close(client_socket);
-    // TODO
-    // remove client from active user list
-    // notify anyone chatting with this client (sockfd) that the user logged off
     
+    int indexToRemove = -1;
+    
+    // Find users who were chatting with this user
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (active_users[i].recip_socket == client_socket) {
+            // Invalidate recip socket, msg can not be fwd
+            active_users[i].recip_socket = -1;
+
+            // notify anyone chatting with this client (sockfd) that the user logged off
+            send(active_users[i].socket, ("[INFO] %s has left the chat.", active_users[i].recip_name), 29, 0);
+
+            // Invalidate recip name, it is meaningless
+            strncpy(active_users[i].recip_name, "", MAX_NAME_LENGTH);
+        }
+    }
+
+    // Find the user who just left (to remove them from active array)
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (active_users[i].socket == client_socket) {
+            indexToRemove = i;
+            printf("Client %s has disconnected.\n", active_users[i].name);
+            break;
+        }
+    }
+
+    // Shift array to remove this user
+    for (int i = indexToRemove; i < num_users - 1; i++) {
+        active_users[i] = active_users[i + 1];
+    }
+
+    // Reduce the array size
+    num_users--;
+
+    close(client_socket);
 }
 
 void clientConnected(int client_socket, char* username)
 {
-    // add client from active user list
-    // notify anyone chatting with this client (sockfd) that the user logged on
+    // Initialize the client
+    Client newClient;
+    newClient.socket = client_socket;
+    strncpy(newClient.name, username, sizeof(newClient.name) - 1);
+    newClient.name[sizeof(newClient.name) - 1] = '\0'; // Null-terminate the string
+    newClient.recip_socket = -1;  // Set recip_socket to -1
+    strncpy(newClient.recip_name, "", MAX_NAME_LENGTH);  // Set recip_name
+
+    // add client to active user list
+    active_users[num_users++] = newClient;
+    
+    // Find users who are chatting with this user
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (strcmp(active_users[i].recip_name, username) == 0)
+        {
+            // Set the recip socket for this user so now the messages can fwd
+            active_users[i].recip_socket = client_socket;
+            // Recip_name is already set (thats how we located this user)
+        
+            // notify anyone chatting with this client (sockfd) that the user logged off
+            send(active_users[i].socket, ("[INFO] %s has joined the chat.", username), 31, 0);
+        }
+    }
+
     printf("Client %s has connected!\n", username);
+}
+
+Client findClientBySocket(int socket) {
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (active_users[i].socket == socket) {
+            // Return the Client structure when a matching socket is found
+            return active_users[i];
+        }
+    }
+
+    // If no matching socket is found, return a default/empty Client structure
+    Client emptyClient;
+    emptyClient.socket = -1; 
+    
+    return emptyClient;
 }
