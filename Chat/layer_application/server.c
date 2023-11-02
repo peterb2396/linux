@@ -203,12 +203,22 @@ void* handle_client(void* arg) {
     // Get the latest client details
     client = findClientBySocket(client_socket);
 
-    // Open the file
-    // Create a file for this user's chat with the target user
-    char path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
-    snprintf(path, sizeof(path), "%s/%s/%s.txt", HISTORY_DIR, client.name, client.recip_name);
-    FILE * history_file = fopen(path, "w+"); //w+ creates and allows read write. r+ does not create new!
 
+    // ** Create the history text files. Note the directories will be valid because
+    // both users must have already registered to the system (which is when a folder is made)
+
+    // Create a file for this user's chat with the target user
+    char my_history_path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
+    snprintf(my_history_path, sizeof(my_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.name, client.recip_name);
+    FILE * my_history_file; //a+ creates and allows read write. r+ does not create new!, and w+ will truncate
+
+   
+    // Create a file for the target user's history with this user
+    char their_history_path[strlen(HISTORY_DIR) + strlen(client.recip_name) + strlen(client.name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
+    snprintf(their_history_path, sizeof(their_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.recip_name, client.name);
+    FILE * their_history_file;
+
+    
     // Handle chat functionality
     while (1) {
         memset(buffer, 0, sizeof(buffer));
@@ -236,6 +246,22 @@ void* handle_client(void* arg) {
         int msg_len = strlen(buffer) + strlen(client.name) + 3;
         char* message = (char*)malloc(msg_len); // Add 3 for : , \0
         snprintf(message, msg_len, "%s: %s", client.name, buffer);
+
+        // Chat History: 
+
+        // Open the files
+        // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
+        my_history_file = fopen(my_history_path, "a+");
+        their_history_file = fopen(their_history_path, "a+"); 
+
+        // Add the message to MY history (with 'you')
+        fprintf(my_history_file, "YOU: %s\n", buffer);
+        // Add the message to the client's history (with my name)
+        fprintf(their_history_file, "%s\n", message);
+
+        // Close the history files (to save them)
+        fclose(my_history_file);
+        fclose(their_history_file);
 
         // Send to recipient
         send(client.recip_socket, message, msg_len, 0);
