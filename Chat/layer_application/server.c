@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <pthread.h>
 
@@ -38,6 +40,7 @@ typedef struct {
 
 Client active_users[MAX_USERS];
 int num_users = 0;
+const char* HISTORY_DIR = "chats";
 
 void* handle_client(void* arg);
 int authenticate_user(int client_socket, char* username, char* password);
@@ -53,6 +56,7 @@ int main() {
     int server_socket, client_socket, port;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
+    
 
     // Create socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -84,6 +88,12 @@ int main() {
 
     printf("Server listening on port %d\n", server_addr.sin_port);
     fflush(stdout);
+
+    // Make history directory if it doesnt exist
+    const char* subDir = "sub_directory";        // Replace with your desired subdirectory name
+
+    // Create the parent directory if it doesn't exist
+    mkdir(HISTORY_DIR, 0777);
     
 
     while (1) {
@@ -468,6 +478,11 @@ void sendUserNamesToClient(int clientSocket) {
                     // and set each parties recip_socket to allow msgs to be forwarded.
                 }
 
+                // Create a folder for this user's chat with the target user
+                char path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 3]; //add three for 2 slashes and \0
+                snprintf(path, sizeof(path), "%s/%s/%s", HISTORY_DIR, client.name, client.recip_name);
+                mkdir(path, 0777);
+
                 // Update the copies of the clients back into the array
                 modifyClient(client);
                 modifyClient(recip_client);
@@ -551,6 +566,12 @@ void clientConnected(int client_socket, char* username)
 
     // add client to active user list
     active_users[num_users++] = newClient;
+
+    // make sure this client has a folder for their history in the database
+    // Create a folder for this user's chat with the target user
+    char path[strlen(HISTORY_DIR) + strlen(newClient.name) + 2];
+    snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, newClient.name);
+    mkdir(path, 0777);
 
     printf("Client %s has connected!\n", username);
 }
