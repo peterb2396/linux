@@ -200,6 +200,15 @@ void* handle_client(void* arg) {
     // Present list of users to chat to
     sendUserNamesToClient(client_socket);
 
+    // Get the latest client details
+    client = findClientBySocket(client_socket);
+
+    // Open the file
+    // Create a file for this user's chat with the target user
+    char path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
+    snprintf(path, sizeof(path), "%s/%s/%s.txt", HISTORY_DIR, client.name, client.recip_name);
+    FILE * history_file = fopen(path, "w+"); //w+ creates and allows read write. r+ does not create new!
+
     // Handle chat functionality
     while (1) {
         memset(buffer, 0, sizeof(buffer));
@@ -221,8 +230,7 @@ void* handle_client(void* arg) {
 
         // Process the received message and send it to the appropriate recipient(s)
 
-        // Get the latest client details
-        client = findClientBySocket(client_socket);
+        
         
         // Prepare the message in format Name: message
         int msg_len = strlen(buffer) + strlen(client.name) + 3;
@@ -478,10 +486,7 @@ void sendUserNamesToClient(int clientSocket) {
                     // and set each parties recip_socket to allow msgs to be forwarded.
                 }
 
-                // Create a folder for this user's chat with the target user
-                char path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 3]; //add three for 2 slashes and \0
-                snprintf(path, sizeof(path), "%s/%s/%s", HISTORY_DIR, client.name, client.recip_name);
-                mkdir(path, 0777);
+                
 
                 // Update the copies of the clients back into the array
                 modifyClient(client);
