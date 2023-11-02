@@ -240,12 +240,20 @@ void* handle_client(void* arg) {
 
         // Process the received message and send it to the appropriate recipient(s)
 
+
+        // If the recipient was offline, double check to see if they came online
+        // by pulling the latest client details.
+        if (client.recip_socket == -1)
+        {
+            // Get the latest client details
+            client = findClientBySocket(client_socket);
+        }
         
         
         // Prepare the message in format Name: message
-        int msg_len = strlen(buffer) + strlen(client.name) + 3;
-        char* message = (char*)malloc(msg_len); // Add 3 for : , \0
-        snprintf(message, msg_len, "%s: %s", client.name, buffer);
+        int msg_len = strlen(buffer) + strlen(client.name) + 4;
+        char* message = (char*)malloc(msg_len); // Add 4 for :, ,\0,-
+        snprintf(message, msg_len, "-%s: %s", client.name, buffer);
 
         // Chat History: 
 
@@ -254,8 +262,8 @@ void* handle_client(void* arg) {
         my_history_file = fopen(my_history_path, "a+");
         their_history_file = fopen(their_history_path, "a+"); 
 
-        // Add the message to MY history (with 'you')
-        fprintf(my_history_file, "YOU: %s\n", buffer);
+        // Add the message to MY history (with no name.. maybe add you: ?)
+        fprintf(my_history_file, "%s\n", buffer);
         // Add the message to the client's history (with my name)
         fprintf(their_history_file, "%s\n", message);
 
@@ -263,10 +271,11 @@ void* handle_client(void* arg) {
         fclose(my_history_file);
         fclose(their_history_file);
 
-        // Send to recipient
-        send(client.recip_socket, message, msg_len, 0);
+        // Send to recipient if they are online
+        if (client.recip_socket >= 0)
+            send(client.recip_socket, message, msg_len, 0);
 
-        // Free memory
+        // Free memory for message string
         free(message);
         
         
