@@ -114,6 +114,8 @@ void* handle_client(void* arg) {
     char password[MAX_PASS_LENGTH];
     char buffer[1024];
 
+    Client client;
+
     int authed; // Is this client logged in
 
     // Prompt the client for login or register until they're authenticated
@@ -154,6 +156,7 @@ void* handle_client(void* arg) {
 
             if (authenticate_user(client_socket, username, password)) {
                 authed = 1;
+                
             } else {
                 // Login failed
                 send(client_socket, "Login failed. Please try again.\n", 32, 0);
@@ -205,7 +208,23 @@ void* handle_client(void* arg) {
             clientDisconnected(client_socket);
             return NULL;
         }
+
         // Process the received message and send it to the appropriate recipient(s)
+
+        // Get the latest client details
+        client = findClientBySocket(client_socket);
+        
+        // Prepare the message in format Name: message
+        int msg_len = strlen(buffer) + strlen(client.name) + 3;
+        char* message = (char*)malloc(msg_len); // Add 3 for : , \0
+        snprintf(message, msg_len, "%s: %s", client.name, buffer);
+
+        // Send to recipient
+        send(client.recip_socket, message, msg_len, 0);
+
+        // Free memory
+        free(message);
+        
         
     }
 
