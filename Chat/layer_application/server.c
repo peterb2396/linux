@@ -16,21 +16,7 @@
 
 // TODO:
 // Dont allow user to chat with themselves
-// Investigate seg fault in double digit clients?
 
-// TODO: Implement this Client.
-// Implement display users when new user registers to all not in a chat
-// How to send message? <MSG><FROM>c1</FROM><TO>c2></TO><BODY>hi</BODY></MSG>
-// Above is not necessary. We know the client easily, so just need to set his
-// recip name and socket, when they choose a recipient name look here for its socket.
-// NOTE recip socket can be undefined in which client is offline, msg will not fwd
-
-// Then when chat, we can easily find the source and destination
-// Simply update the file for chats/source/dest.txt
-// AND, update the file for chats/dest/source.txt
-// THEN fwd the msg by printing it on the dest client IFF they are online (sockfd valid)
-
-// Seperately, when a client connects to a chat, load the chat file to stdout.
 typedef struct {
     int socket;
     char name[MAX_NAME_LENGTH + 1]; // Allow null terminator
@@ -89,10 +75,7 @@ int main() {
     printf("Server listening on port %d\n", server_addr.sin_port);
     fflush(stdout);
 
-    // Make history directory if it doesnt exist
-    const char* subDir = "sub_directory";        // Replace with your desired subdirectory name
-
-    // Create the parent directory if it doesn't exist
+    // Create the parent chat directory if it doesn't exist
     mkdir(HISTORY_DIR, 0777);
     
 
@@ -103,8 +86,6 @@ int main() {
             perror("Error accepting client connection");
             continue;
         }
-    
-        
 
         // Create a new thread to handle the client
         pthread_t thread;
@@ -144,8 +125,6 @@ void* handle_client(void* arg) {
         // Receive the index from the client
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
-        
-        
 
         if (strcmp(buffer, "exit") == 0) 
         {
@@ -363,7 +342,6 @@ int register_user(int client_socket, char* username, char* password) {
         if (strlen(client.recip_name) == 0)
         {
             send(client.socket, "0", 2, 0); // Trigger refresh list
-            
         }
     }
 
@@ -395,7 +373,9 @@ void sendUserNamesToClient(int clientSocket) {
     char line[MAX_NAME_LENGTH + MAX_PASS_LENGTH + 1];
     while (numUsers < MAX_USERS && fgets(line, sizeof(line), file)) {
         char *user = strtok(line, ":");
-        if (user != NULL) {
+
+        // Send user as an option if not themself
+        if (user != NULL) {// && strcmp(user, client.name) != 0
             usernames[numUsers] = strdup(user);  // Store the username
 
             // Send username as an option
@@ -422,8 +402,11 @@ void sendUserNamesToClient(int clientSocket) {
 
     if (numUsers == 1)
     {
-        send(clientSocket, "No users exist yet!\nWill notify you when they do...\n", 53, 0);
+        send(clientSocket, "<info>No users exist yet!\nWill notify you when they do...</info>", 65, 0);
     }
+
+   
+    
 
     // Listen for client response
     int valid_res = 0;
@@ -438,6 +421,8 @@ void sendUserNamesToClient(int clientSocket) {
         ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
         buffer[bytesRead] = '\0';
 
+        
+
         if (bytesRead == -1) {
             perror("Error receiving data from the client");
         } else if (bytesRead == 0) {
@@ -451,37 +436,30 @@ void sendUserNamesToClient(int clientSocket) {
             continue;
         }
 
-        // Client requested refresh
+        // Refresh the list for this client
         else if (strcmp(buffer, "0") == 0) 
         {
-            // Get the client
-            Client client = findClientBySocket(clientSocket);
-
-            // Refresh the list for this client
             // Clear the terminal
-            for (int j = 0; j < 10; j++)
-            {
-                char message[15];
-                snprintf(message, sizeof(message), "<INFO>\n</INFO>");
-
-                char res[2];
-                recv(client.socket, res, 1, 0); // Block until we get ACK    
-                send(client.socket, message, sizeof(message), 0);
-            }
-
-            
+            send(clientSocket, "\n\n\n\n", 5, 0);
             // Display the names
-            sendUserNamesToClient(client.socket);
-            
-
-            continue; // Loop again once printed
+            sendUserNamesToClient(clientSocket);
+            break;
+        
         }
+
+        
 
         else if (strcmp(buffer, "exit") == 0) 
         {
             clientDisconnected(clientSocket);
             return;
         }
+        // They can not make a selection, no users exist
+        else if (numUsers == 1)
+        {
+            send(clientSocket, "<INFO>No users exist yet!\nWill notify you when they do...</INFO>", 65, 0);
+        }
+
         else {
             // Convert the received index to an integer
             index = atoi(buffer);
@@ -540,12 +518,14 @@ void sendUserNamesToClient(int clientSocket) {
                 // Handle an invalid index
                 if (index == 0)
                 {
+                    continue;
                     // Disconnect
-                    clientDisconnected(clientSocket);
+                    // clientDisconnected(clientSocket);
+                    // return;
 
                 }
                 else{
-                    snprintf(message, sizeof(message), "Invalid choice: %d", index);
+                    snprintf(message, sizeof(message), "Invalid choice: %d (max %d)", index, numUsers);
                     send(client.socket, message, strlen(message), 0);
                 }
                 char message[50];
