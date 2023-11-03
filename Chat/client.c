@@ -6,13 +6,43 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 12345
+#define DEFAULT_SERVER_IP "127.0.0.1"
+#define DEFAULT_SERVER_PORT 12345
 
 void receiveMessages(int server_socket);
 void sendMessages(int server_socket);
+int SERVER_PORT;
+char SERVER_IP[16];
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc == 1) 
+    {
+        // No command line arguments provided
+        strncpy(SERVER_IP, DEFAULT_SERVER_IP, strlen(DEFAULT_SERVER_IP));
+        SERVER_IP[strlen(DEFAULT_SERVER_IP)] = '\0';
+        SERVER_PORT = DEFAULT_SERVER_PORT;
+    } 
+    else if (argc == 2) 
+    {
+        // One command line argument provided (server IP)
+        strncpy(SERVER_IP, argv[1], strlen(argv[1]));
+        SERVER_IP[strlen(argv[1])] = '\0';
+        SERVER_PORT = DEFAULT_SERVER_PORT;
+    } 
+    else if (argc == 3) 
+    {
+        // Two command line arguments provided (IP and port)
+        strncpy(SERVER_IP, argv[1], strlen(argv[1]));
+        SERVER_IP[strlen(argv[1])] = '\0';
+        SERVER_PORT = atoi(argv[2]);
+    } 
+    else 
+    {
+        // More than two arguments provided
+        printf("Too many command line arguments provided.\n");
+        exit(EXIT_FAILURE);
+    }
+
     int server_socket;
     struct sockaddr_in server_addr;
 
@@ -59,9 +89,6 @@ int main() {
 // Repeatedly listen and send messages to the server on this process.
 // Server knows whether it is a chat message because we are in that stage
 // of the logic loop and it asked to recieve a chat message on that thread.
-// Client can have a global variable of target recipient, in order to
-// Figure out how to format <TO><BODY> etc... if target is null, no <BODY>?
-// Or we can break the following function into different such as chat(), login() etc
 void sendMessages(int server_socket)
 {
     while (1) {
@@ -83,23 +110,20 @@ void sendMessages(int server_socket)
         // Check if the user wants to exit to print exiting
         if (strcmp(message, "/exit") == 0) {
             printf("Exiting...\n");
+            
+            send(server_socket, message, strlen(message), 0);
+            exit(EXIT_SUCCESS);
 
-            //char tagged_message[strlen(message) + 20];
-            //sprintf(tagged_message, "<EXIT>%s</EXIT>", message);
         }
 
         // Check if the user wants to logout to print logout confirm msg
         if (strcmp(message, "/logout") == 0) {
             printf("Deleting Account..\n");
 
-            //char tagged_message[strlen(message) + 20];
-            //sprintf(tagged_message, "<LOGOUT>%s</LOGOUT>", message);
+            send(server_socket, message, strlen(message), 0);
+            exit(EXIT_SUCCESS);
+
         }
-
-        // Add MSG tag
-        //char tagged_message[strlen(message) + 11];
-        //sprintf(tagged_message, "<MSG><FROM>%s</FROM><TO>%s</TO><BODY>%s</BODY></MSG>", client.name, client.recip, message);
-
         // Send the message to the server
         ssize_t bytesSent = send(server_socket, message, strlen(message), 0);
         if (bytesSent == -1) {

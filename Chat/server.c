@@ -14,8 +14,12 @@
 #define MAX_USERS 6
 #define MAX_NAME_LENGTH 8
 #define MAX_PASS_LENGTH 20
-#define PORT 12345
+#define DEFAULT_PORT 12345
 
+// Client type to store who to forward messages to
+// Stores data for <FROM>, <TO>, including their names and sockets
+// Can establish two way communication and can test to see if this client
+// is in a chat / if their recipient is online or offline.
 typedef struct {
     int socket;
     char name[MAX_NAME_LENGTH + 1]; // Allow null terminator
@@ -23,9 +27,15 @@ typedef struct {
     char recip_name[MAX_NAME_LENGTH + 1]; // What is their name?
 } Client;
 
+// Maintain a list of clients to present new users
+// with options to chat with. This is where we will
+// obtain their socket based on the <TO> tag from a sender
 Client active_users[MAX_USERS];
 int num_users = 0;
+
+// Directories to store chat history and users within
 const char* HISTORY_DIR = "chats";
+const char* USERS_FILE = "users.txt";
 
 void* handle_client(void* arg);
 int authenticate_user(int client_socket, char* username, char* password);
@@ -41,7 +51,29 @@ void deleteUser(const char* username);
 void deleteUserFiles(const char* username);
 void removeUserFromList(const char* username);
 
-int main() {
+int PORT;
+
+// Initialize the server
+// Listen for connections from clients
+// Delegate a thread to each client
+int main(int argc, char* argv[]) {
+    if (argc == 1) 
+    {
+        // No command line arguments provided
+        PORT = DEFAULT_PORT;
+    } 
+    else if (argc == 2) 
+    {
+        // One command line argument provided (server PORT)
+        PORT = atoi(argv[1]);
+    }
+    else 
+    {
+        // More than two arguments provided
+        printf("Too many command line arguments provided.\n");
+        exit(EXIT_FAILURE);
+    }
+
     int server_socket, client_socket, port;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
@@ -102,6 +134,13 @@ int main() {
     return 0;
 }
 
+// Thread for each client
+// Handles entire data flow:
+// 1. Login or Register
+// 2. Select a user to chat with
+// 3. Loads their history
+// 4. Allows two way chat
+// 5. Listens for requests to exit or delete
 void* handle_client(void* arg) {
     int client_socket = *((int*)arg);
     char username[MAX_NAME_LENGTH];
@@ -192,13 +231,14 @@ void* handle_client(void* arg) {
         return NULL;
     }
 
-    // Get the latest client details
+    // User has selected a chat destination!
+
+    // Get the latest client details, including their selected recipient
     client = findClientBySocket(client_socket);
 
 
     // ** Create the history text files. Note the directories will be valid because
     // both users must have already registered to the system (which is when a folder is made)
-    // A segmentation fault will occur if the file structure is malformed
 
     // Create a file for this user's chat with the target user
     char my_history_path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
@@ -240,9 +280,6 @@ void* handle_client(void* arg) {
 
     // Handle chat functionality
     while (1) {
-        // Prompt client message with "-you: "
-        // Not in practice yet because weird behavior such as you: him: his message
-        //send(client_socket, "<PROMPT>-you: </PROMPT>", 24, 0);
 
         // Listen for client's message
         memset(buffer, 0, sizeof(buffer));
@@ -257,13 +294,15 @@ void* handle_client(void* arg) {
             clientDisconnected(client_socket);
             return NULL;
         } 
+
+        // Client wants to exit the chat
         else if (strcmp(buffer, "/exit") == 0) 
         {
             clientDisconnected(client_socket);
             return NULL;
         }
 
-        // Client wants to delete their account
+        // Client wants to delete their account for good
         else if (strcmp(buffer, "/logout") == 0) 
         {
             // Delete server files for  the user
@@ -345,12 +384,17 @@ void* handle_client(void* arg) {
     clientDisconnected(client_socket);
     return NULL;
 }
-void deleteUser(const char* username) {
+
+// User opts to log out from database
+// Logout is a deletion, exit is temporary
+void deleteUser(const char* username) 
+{
     deleteUserFiles(username);
     removeUserFromList(username);
 }
 
-
+// Delete all history files associated with a given user
+// Occurs when the user opts to remove themselves from the database
 void deleteUserFiles(const char* username) {
     DIR *dir = opendir(HISTORY_DIR);
 
@@ -408,9 +452,10 @@ void deleteUserFiles(const char* username) {
 }
 
 // Remove the user from users.txt
+// Occurs when the users logs out from the system permanently
 void removeUserFromList(const char* username) {
     
-    FILE* inputFile = fopen("users.txt", "r"); // Read users.txt
+    FILE* inputFile = fopen(USERS_FILE, "r"); // Read users.txt
     FILE* tempFile = fopen("temp.txt", "w");   // Write all but one line to new file
 
     if (inputFile == NULL || tempFile == NULL) {
@@ -441,18 +486,19 @@ void removeUserFromList(const char* username) {
     fclose(tempFile);
 
     // Remove the original file
-    remove("users.txt");
+    remove(USERS_FILE);
 
     // Rename the temporary file to the original file
-    rename("temp.txt", "users.txt");
+    rename("temp.txt", USERS_FILE);
 }
 
 
 
-// Login
+// Login a user to the given socket with the provided credentials 
+// Will return 0 for failure or 1 for success
 int authenticate_user(int client_socket, char* username, char* password) {
     // Read users.txt and verify username and password
-    FILE* file = fopen("users.txt", "r");
+    FILE* file = fopen(USERS_FILE, "r");
     if (file == NULL) {
         perror("Error opening users.txt");
         return 0;
@@ -478,10 +524,12 @@ int authenticate_user(int client_socket, char* username, char* password) {
     return auth;
 }
 
+// Register a new user on the given socket with the provided acount details
+// Will verify that the provided data is accpetable and return 0 or 1
 int register_user(int client_socket, char* username, char* password) {
 
     // Open in read mode to count the number of users
-    FILE* file_r = fopen("users.txt", "r");
+    FILE* file_r = fopen(USERS_FILE, "r");
     if (file_r == NULL) {
         perror("Error opening users.txt");
         return 0;
@@ -496,7 +544,13 @@ int register_user(int client_socket, char* username, char* password) {
     }
     fclose(file_r);
 
+    // Make sure the password respects max password length
+    if (strlen(password) > MAX_PASS_LENGTH)
+    {
+        return 0;
+    }
 
+    // Make sure we aren't at max users
     if (users >= MAX_USERS)
     {
         printf("Error adding user: max users reached\n");
@@ -510,7 +564,7 @@ int register_user(int client_socket, char* username, char* password) {
     }
 
     // User is valid, add them
-    FILE* file = fopen("users.txt", "a");
+    FILE* file = fopen(USERS_FILE, "a");
     if (file == NULL) {
         perror("Error opening users.txt");
         return 0;
@@ -544,9 +598,10 @@ int register_user(int client_socket, char* username, char* password) {
 }
 
 
-
+// Send the given client a list of all registered users
+// Prompts the client to choose a user to communicate with
 int sendUserNamesToClient(int client_socket) {
-    FILE *file = fopen("users.txt", "r");
+    FILE *file = fopen(USERS_FILE, "r");
     if (file == NULL) {
         perror("Error opening file");
         return 0;
@@ -714,9 +769,6 @@ int sendUserNamesToClient(int client_socket) {
                 if (index == 0)
                 {
                     continue;
-                    // Disconnect
-                    // clientDisconnected(client_socket);
-                    // return;
 
                 }
                 else // Their choice was invalid
@@ -738,9 +790,12 @@ int sendUserNamesToClient(int client_socket) {
     for (int i = 0; i < numUsers; i++) {
         free(usernames[i]);
     }
-    return 1;
+    return 1; // Successfully chose a user
 }
 
+// Disconnect this client from the server
+// Performs cleanup such as removal from array and
+// informs users chatting with them that they went offline
 void clientDisconnected(int client_socket)
 {
     
@@ -788,6 +843,9 @@ void clientDisconnected(int client_socket)
     
 }
 
+// Connect a client to the server
+// Adds them to the array so we can access their name & recipient
+// Used for forwarding messages, sets up a file for them in the database
 void clientConnected(int client_socket, char* username)
 {
     // Initialize the client
@@ -810,6 +868,7 @@ void clientConnected(int client_socket, char* username)
     printf("Client %s has connected!\n", username);
 }
 
+// Find a client by their socket
 Client findClientBySocket(int socket) {
     for (int i = 0; i < num_users; i++) {
         if (active_users[i].socket == socket) {
@@ -843,6 +902,7 @@ Client findClientByName(const char* name) {
 }
 
 // Update a provided client
+// Used when client was passed by value rather than by reference
 void modifyClient(Client newClient) {
     for (int i = 0; i < num_users; i++) {
         if (strcmp(active_users[i].name, newClient.name) == 0) {
@@ -852,7 +912,7 @@ void modifyClient(Client newClient) {
     }
 }
 
-// Verify username format
+// Verify username format follows rules
 int verifyUsername(const char *str) {
     size_t length = strlen(str);
 
