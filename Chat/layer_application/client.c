@@ -151,6 +151,7 @@ void receiveMessages(int server_socket) {
                 message = buffer2;
             }
 
+
             // Show the client the message from the server, without the tags
             printf("%s\n", message);
             fflush(stdout);

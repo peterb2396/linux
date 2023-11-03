@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -9,8 +10,8 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-#define MAX_USERS 10
-#define MAX_NAME_LENGTH 10
+#define MAX_USERS 6
+#define MAX_NAME_LENGTH 8
 #define MAX_PASS_LENGTH 20
 #define PORT 12345
 
@@ -32,8 +33,9 @@ void sendUserNamesToClient(int clientSocket);
 void clientConnected(int client_socket, char* username);
 void clientDisconnected(int client_socket);
 Client findClientBySocket(int socket);
-Client findClientByName(char* name);
+Client findClientByName(const char* name);
 void modifyClient(Client newClient);
+int verifyUsername(const char *str);
 
 int main() {
     int server_socket, client_socket, port;
@@ -106,16 +108,22 @@ void* handle_client(void* arg) {
 
     int authed; // Is this client logged in
 
+    send(client_socket, "1. Login\n2. Register\nEnter your choice: ", 41, 0);
+
     // Prompt the client for login or register until they're authenticated
     do
     {
+        
+
         // Boolean: Is the user logged in? Repeat this loop UNTIL so!
         authed = 0;
         
-        send(client_socket, "1. Login\n2. Register\nEnter your choice: ", 41, 0);
+        
         int choice;
 
-
+        // clear response, username and password to avoid buffer overflows
+        memset(username, 0, sizeof(username));
+        memset(password, 0, sizeof(password));
         memset(buffer, 0, sizeof(buffer));
 
 
@@ -145,7 +153,7 @@ void* handle_client(void* arg) {
                 
             } else {
                 // Login failed
-                send(client_socket, "Login failed. Please try again.\n", 32, 0);
+                send(client_socket, "Login failed. Please try again.\n1. Login\n2. Register\nEnter your choice: ", 73, 0);
                
             }
         } else if (choice == 2) {
@@ -161,7 +169,7 @@ void* handle_client(void* arg) {
                 authed = 1;
             } else {
                 // Registration failed
-                send(client_socket, "Registration failed. Please try again.\n", 38, 0);
+                send(client_socket, "Registration failed. Please try again.\n1. Login\n2. Register\nEnter your choice: ", 80, 0);
                 
             }
         } else {
@@ -219,11 +227,19 @@ void* handle_client(void* arg) {
     snprintf(their_history_path, sizeof(their_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.recip_name, client.name);
     FILE * their_history_file;
 
+    
+
 
     // Handle chat functionality
     while (1) {
+        // Prompt client message with "-you: "
+        // Not in practice yet because weird behavior such as you: him: his message
+        //send(client_socket, "<PROMPT>-you: </PROMPT>", 24, 0);
+
+        // Listen for client's message
         memset(buffer, 0, sizeof(buffer));
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer), 0);
+        
         if (bytesRead < 0)
         {
             exit(EXIT_FAILURE);
@@ -246,7 +262,7 @@ void* handle_client(void* arg) {
         // by pulling the latest client details.
         if (client.recip_socket == -1)
         {
-            // Get the latest client details
+            // Get the latest client details incase they came online
             client = findClientBySocket(client_socket);
         }
         
@@ -256,6 +272,8 @@ void* handle_client(void* arg) {
         char* message = (char*)malloc(msg_len); // Add 4 for :, ,\0,-
         snprintf(message, msg_len, "-%s: %s", client.name, buffer);
 
+        
+
         // Chat History: 
 
         // Open the files
@@ -263,10 +281,35 @@ void* handle_client(void* arg) {
         my_history_file = fopen(my_history_path, "a+");
         their_history_file = fopen(their_history_path, "a+"); 
 
+        // Handle errors for my history file (if manually deleted)
+        if (my_history_file == NULL)
+        {
+            // My folder was manually deleted, fix it
+            char path[strlen(HISTORY_DIR) + strlen(client.name) + 2];
+            snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.name);
+            mkdir(path, 0777);
+
+            my_history_file = fopen(my_history_path, "a+"); 
+        }
+
+        // Handle errors for their history file (if manually deleted)
+        if (their_history_file == NULL)
+        {
+            // Their folder was manually deleted, fix it
+            char path[strlen(HISTORY_DIR) + strlen(client.recip_name) + 2];
+            snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.recip_name);
+            mkdir(path, 0777);
+
+            their_history_file = fopen(their_history_path, "a+"); 
+        }
+
+        
+
         // Add the message to MY history (with no name.. maybe add you: ?)
-        fprintf(my_history_file, "%s\n", buffer);
+        fprintf(my_history_file, "-YOU: %s\n", buffer);
         // Add the message to the client's history (with my name)
         fprintf(their_history_file, "%s\n", message);
+
 
         // Close the history files (to save them)
         fclose(my_history_file);
@@ -316,12 +359,43 @@ int authenticate_user(int client_socket, char* username, char* password) {
 }
 
 int register_user(int client_socket, char* username, char* password) {
-    // Add a new user to users.txt
+
+    // Open in read mode to count the number of users
+    FILE* file_r = fopen("users.txt", "r");
+    if (file_r == NULL) {
+        perror("Error opening users.txt");
+        return 0;
+    }
+
+    // Make sure we dont have too many users
+    int users = 0;
+    char buffer[MAX_NAME_LENGTH + MAX_PASS_LENGTH + 5];
+
+    while (fgets(buffer, sizeof(buffer), file_r) != NULL) {
+        users++;
+    }
+    fclose(file_r);
+
+
+    if (users >= MAX_USERS)
+    {
+        printf("Error adding user: max users reached\n");
+        return 0;
+    }
+
+    // Ensure the name is of proper format, fail if not
+    if (!verifyUsername(username))
+    {
+        return 0;
+    }
+
+    // User is valid, add them
     FILE* file = fopen("users.txt", "a");
     if (file == NULL) {
         perror("Error opening users.txt");
         return 0;
     }
+
 
     if (fprintf(file, "%s:%s\n", username, password) < 0) {
         perror("Error writing to users.txt");
@@ -626,7 +700,7 @@ Client findClientBySocket(int socket) {
 }
 
 // Find a client given their name
-Client findClientByName(char* name) {
+Client findClientByName(const char* name) {
     for (int i = 0; i < num_users; i++) {
         
         if (strcmp(name, active_users[i].name) == 0) {
@@ -650,4 +724,25 @@ void modifyClient(Client newClient) {
             return;
         }
     }
+}
+
+// Verify username format
+int verifyUsername(const char *str) {
+    size_t length = strlen(str);
+
+    if (length == 0 || length > MAX_NAME_LENGTH) {
+        return 0;  // Length check failed
+    }
+
+    if (!isalpha(str[0])) {
+        return 0;  // First character not a letter
+    }
+
+    for (size_t i = 0; i < length; i++) {
+        if (!isalnum(str[i])) {
+            return 0;  // All characters not alphanumeric
+        }
+    }
+
+    return 1;  // Name passed all tests
 }
