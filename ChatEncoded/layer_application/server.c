@@ -314,13 +314,8 @@ void* handle_client(void* arg) {
         // Process the received message and send it to the appropriate recipient(s)
 
 
-        // If the recipient was offline, double check to see if they came online
-        // by pulling the latest client details.
-        if (client.recip_socket == -1)
-        {
-            // Get the latest client details incase they came online
-            client = findClientBySocket(client_socket);
-        }
+        // Grab the latest client socket
+        client = findClientBySocket(client_socket);
         
         
         // Prepare the message in format Name: message
@@ -372,8 +367,10 @@ void* handle_client(void* arg) {
         fclose(their_history_file);
 
         // Send to recipient if they are online
+        ssize_t bread;
         if (client.recip_socket >= 0)
-            send(client.recip_socket, message, msg_len, 0);
+            bread = send(client.recip_socket, message, msg_len, 0);
+        
 
         // Free memory for message string
         free(message);
