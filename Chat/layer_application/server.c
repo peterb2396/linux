@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <dirent.h>
 
 #define MAX_USERS 6
 #define MAX_NAME_LENGTH 8
@@ -29,13 +30,14 @@ const char* HISTORY_DIR = "chats";
 void* handle_client(void* arg);
 int authenticate_user(int client_socket, char* username, char* password);
 int register_user(int client_socket, char* username, char* password);
-void sendUserNamesToClient(int clientSocket);
+int sendUserNamesToClient(int client_socket);
 void clientConnected(int client_socket, char* username);
 void clientDisconnected(int client_socket);
 Client findClientBySocket(int socket);
 Client findClientByName(const char* name);
 void modifyClient(Client newClient);
 int verifyUsername(const char *str);
+void deleteUser(const char* username);
 
 int main() {
     int server_socket, client_socket, port;
@@ -131,7 +133,7 @@ void* handle_client(void* arg) {
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
 
-        if (strcmp(buffer, "exit") == 0) 
+        if (strcmp(buffer, "/exit") == 0) 
         {
             clientDisconnected(client_socket);
             return NULL;
@@ -182,7 +184,11 @@ void* handle_client(void* arg) {
 
     // User logged in!
     // Present list of users to chat to
-    sendUserNamesToClient(client_socket);
+    if (!sendUserNamesToClient(client_socket))
+    {
+        // User quit or failure occured
+        return NULL;
+    }
 
     // Get the latest client details
     client = findClientBySocket(client_socket);
@@ -249,8 +255,17 @@ void* handle_client(void* arg) {
             clientDisconnected(client_socket);
             return NULL;
         } 
-        else if (strcmp(buffer, "exit") == 0) 
+        else if (strcmp(buffer, "/exit") == 0) 
         {
+            clientDisconnected(client_socket);
+            return NULL;
+        }
+
+        // Client wants to delete their account
+        else if (strcmp(buffer, "/logout") == 0) 
+        {
+            // Delete server files for  the user
+            deleteUser(client.name);
             clientDisconnected(client_socket);
             return NULL;
         }
@@ -328,6 +343,67 @@ void* handle_client(void* arg) {
     clientDisconnected(client_socket);
     return NULL;
 }
+
+
+void deleteUser(const char* username) {
+    DIR *dir = opendir(HISTORY_DIR);
+
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    struct dirent *entry;
+
+    // For each user folder, delete the leaving user's chat file
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+
+            // Store the name of this user directory
+            char userFolder[strlen(entry->d_name) + strlen(HISTORY_DIR) + 2];
+            sprintf(userFolder, "%s/%s", HISTORY_DIR, entry->d_name);
+
+
+            // THIS IS THE USER TO BE DELETED
+            // DELETE ALL THEIR FILES, THEN DELETE THEIR FOLDER
+            if (strcmp(entry->d_name, username) == 0) {
+                
+                // First, must delete all of my chat files
+                DIR *subdir = opendir(userFolder);
+                if (subdir) {
+                    struct dirent *userFile;
+
+                    // Access each history file for the deleted user
+                    while ((userFile = readdir(subdir)) != NULL) {
+                        if (strcmp(userFile->d_name, ".") != 0 && strcmp(userFile->d_name, "..") != 0) {
+                            
+                            // Remove each txt history file the deleted user had
+                            char userFilePath[strlen(userFolder) + strlen(userFile->d_name) + 6];
+                            snprintf(userFilePath, sizeof(userFilePath), "%s/%s", userFolder, userFile->d_name);
+                            remove(userFilePath);
+                        }
+                    }
+                    closedir(subdir);
+                }
+
+                // Now that the user folder is empty, delete the folder
+                rmdir(userFolder);
+                continue;
+            }
+
+            // This is someone else's folder, delete, if present, the leaving user's chat history
+            char userFilePath[strlen(userFolder) + strlen(username) + 6];
+            snprintf(userFilePath, sizeof(userFilePath), "%s/%s.txt", userFolder, username);
+            remove(userFilePath);
+        }
+    }
+
+    closedir(dir);
+
+    // Remove the user from users.txt
+}
+
+
 
 // Login
 int authenticate_user(int client_socket, char* username, char* password) {
@@ -425,18 +501,18 @@ int register_user(int client_socket, char* username, char* password) {
 
 
 
-void sendUserNamesToClient(int clientSocket) {
+int sendUserNamesToClient(int client_socket) {
     FILE *file = fopen("users.txt", "r");
     if (file == NULL) {
         perror("Error opening file");
-        return;
+        return 0;
     }
 
     char *usernames[MAX_USERS];  // Array to store usernames
     int numUsers = 0;
 
     // Find the client
-    Client client = findClientBySocket(clientSocket);
+    Client client = findClientBySocket(client_socket);
 
     
 
@@ -466,12 +542,12 @@ void sendUserNamesToClient(int clientSocket) {
        
             // Here we are waiting for ACK
             char res[2];
-            recv(clientSocket, res, 2, 0); // Block until we get ACK
+            recv(client_socket, res, 2, 0); // Block until we get ACK
 
             // These send()s all fired before recv() finishes.
             // So, the subsequent send()s were ignored.
             // To fix, I added the above wait for ACK.
-            send(clientSocket, message, sizeof(message), 0);
+            send(client_socket, message, sizeof(message), 0);
 
             
 
@@ -483,7 +559,7 @@ void sendUserNamesToClient(int clientSocket) {
     if (numUsers == 0)
     {
         // Dont send with ACK or the ACK will be read in the do while loop instead of waiting
-        send(clientSocket, "<info>No users exist yet!\nWill notify you when they do...</info>", 65, 0);
+        send(client_socket, "<info>No users exist yet!\nWill notify you when they do...</info>", 65, 0);
     }
 
     
@@ -498,7 +574,7 @@ void sendUserNamesToClient(int clientSocket) {
         memset(buffer, 0, sizeof(buffer));
 
         // Receive the index from the client
-        ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+        ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer), 0);
         buffer[bytesRead] = '\0';
 
         
@@ -507,8 +583,8 @@ void sendUserNamesToClient(int clientSocket) {
             perror("Error receiving data from the client");
         } else if (bytesRead == 0) {
             
-            clientDisconnected(clientSocket);
-            return;
+            clientDisconnected(client_socket);
+            return 0;
         } 
         else if (strcmp(buffer, "|") == 0) 
         {
@@ -520,24 +596,23 @@ void sendUserNamesToClient(int clientSocket) {
         else if (strcmp(buffer, "0") == 0) 
         {
             // Clear the terminal
-            send(clientSocket, "\n\n\n\n", 5, 0);
+            send(client_socket, "\n\n\n\n", 5, 0);
             // Display the names
-            sendUserNamesToClient(clientSocket);
+            sendUserNamesToClient(client_socket);
             break;
         
         }
 
-        
 
-        else if (strcmp(buffer, "exit") == 0) 
+        else if (strcmp(buffer, "/exit") == 0) 
         {
-            clientDisconnected(clientSocket);
-            return;
+            clientDisconnected(client_socket);
+            return 0;
         }
         // They can not make a selection, no users exist
         else if (numUsers == 0)
         {
-            send(clientSocket, "<INFO>No users exist yet!\nWill notify you when they do...</INFO>", 65, 0);
+            send(client_socket, "<INFO>No users exist yet!\nWill notify you when they do...</INFO>", 65, 0);
         }
 
         else {
@@ -548,7 +623,7 @@ void sendUserNamesToClient(int clientSocket) {
                 valid_res = 1;
 
                 // Get this client by socket, and its recipient by name
-                Client client = findClientBySocket(clientSocket);
+                Client client = findClientBySocket(client_socket);
                 Client recip_client = findClientByName(usernames[index - 1]);
 
                 
@@ -596,7 +671,7 @@ void sendUserNamesToClient(int clientSocket) {
                 {
                     continue;
                     // Disconnect
-                    // clientDisconnected(clientSocket);
+                    // clientDisconnected(client_socket);
                     // return;
 
                 }
@@ -619,6 +694,7 @@ void sendUserNamesToClient(int clientSocket) {
     for (int i = 0; i < numUsers; i++) {
         free(usernames[i]);
     }
+    return 1;
 }
 
 void clientDisconnected(int client_socket)
@@ -651,15 +727,21 @@ void clientDisconnected(int client_socket)
         }
     }
 
-    // Shift array to remove this user
-    for (int i = indexToRemove; i < num_users - 1; i++) {
-        active_users[i] = active_users[i + 1];
+    // Only remove if they existed in the array
+    if (indexToRemove > -1)
+    {
+        // Shift array to remove this user
+        for (int i = indexToRemove; i < num_users - 1; i++) {
+            active_users[i] = active_users[i + 1];
+        }
+
+        // Reduce the array size
+        num_users--;
+
     }
 
-    // Reduce the array size
-    num_users--;
-
     close(client_socket);
+    
 }
 
 void clientConnected(int client_socket, char* username)
@@ -730,7 +812,7 @@ void modifyClient(Client newClient) {
 int verifyUsername(const char *str) {
     size_t length = strlen(str);
 
-    if (length == 0 || length > MAX_NAME_LENGTH) {
+    if (length == 0 || length > MAX_NAME_LENGTH + 1) {
         return 0;  // Length check failed
     }
 

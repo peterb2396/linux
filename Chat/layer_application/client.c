@@ -80,12 +80,25 @@ void sendMessages(int server_socket)
             message[len - 1] = '\0';
         }
 
-        // Check if the user wants to exit
-        if (strcmp(message, "exit") == 0) {
+        // Check if the user wants to exit to print exiting
+        if (strcmp(message, "/exit") == 0) {
             printf("Exiting...\n");
-            send(server_socket, message, strlen(message), 0); // Send 0 bytes to signify disconnect
-            break;
+
+            //char tagged_message[strlen(message) + 20];
+            //sprintf(tagged_message, "<EXIT>%s</EXIT>", message);
         }
+
+        // Check if the user wants to logout to print logout confirm msg
+        if (strcmp(message, "/logout") == 0) {
+            printf("Deleting Account..\n");
+
+            //char tagged_message[strlen(message) + 20];
+            //sprintf(tagged_message, "<LOGOUT>%s</LOGOUT>", message);
+        }
+
+        // Add MSG tag
+        //char tagged_message[strlen(message) + 11];
+        //sprintf(tagged_message, "<MSG><FROM>%s</FROM><TO>%s</TO><BODY>%s</BODY></MSG>", client.name, client.recip, message);
 
         // Send the message to the server
         ssize_t bytesSent = send(server_socket, message, strlen(message), 0);
