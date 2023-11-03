@@ -38,6 +38,8 @@ Client findClientByName(const char* name);
 void modifyClient(Client newClient);
 int verifyUsername(const char *str);
 void deleteUser(const char* username);
+void deleteUserFiles(const char* username);
+void removeUserFromList(const char* username);
 
 int main() {
     int server_socket, client_socket, port;
@@ -343,9 +345,13 @@ void* handle_client(void* arg) {
     clientDisconnected(client_socket);
     return NULL;
 }
-
-
 void deleteUser(const char* username) {
+    deleteUserFiles(username);
+    removeUserFromList(username);
+}
+
+
+void deleteUserFiles(const char* username) {
     DIR *dir = opendir(HISTORY_DIR);
 
     if (dir == NULL) {
@@ -367,7 +373,7 @@ void deleteUser(const char* username) {
             // THIS IS THE USER TO BE DELETED
             // DELETE ALL THEIR FILES, THEN DELETE THEIR FOLDER
             if (strcmp(entry->d_name, username) == 0) {
-                
+
                 // First, must delete all of my chat files
                 DIR *subdir = opendir(userFolder);
                 if (subdir) {
@@ -399,8 +405,46 @@ void deleteUser(const char* username) {
     }
 
     closedir(dir);
+}
 
-    // Remove the user from users.txt
+// Remove the user from users.txt
+void removeUserFromList(const char* username) {
+    
+    FILE* inputFile = fopen("users.txt", "r"); // Read users.txt
+    FILE* tempFile = fopen("temp.txt", "w");   // Write all but one line to new file
+
+    if (inputFile == NULL || tempFile == NULL) {
+        perror("Error opening files");
+        return;
+    }
+
+    char line[MAX_NAME_LENGTH + MAX_PASS_LENGTH + 2];
+
+    while (fgets(line, sizeof(line), inputFile)) {
+
+        // This line contains this username
+        char needle[strlen(username) + 2]; // Add space for :,\0
+        sprintf(needle, "%s:", username); 
+        char* found = strstr(line, needle);
+
+        if (found) {
+            // skip the deleted user
+            continue;
+        }
+
+        // Write the other users to the new file
+        fputs(line, tempFile);
+    }
+
+    // Close the input and temporary files
+    fclose(inputFile);
+    fclose(tempFile);
+
+    // Remove the original file
+    remove("users.txt");
+
+    // Rename the temporary file to the original file
+    rename("temp.txt", "users.txt");
 }
 
 
