@@ -206,19 +206,44 @@ void* handle_client(void* arg) {
 
     // ** Create the history text files. Note the directories will be valid because
     // both users must have already registered to the system (which is when a folder is made)
+    // A segmentation fault will occur if the file structure is malformed
 
     // Create a file for this user's chat with the target user
     char my_history_path[strlen(HISTORY_DIR) + strlen(client.name) + strlen(client.recip_name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
     snprintf(my_history_path, sizeof(my_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.name, client.recip_name);
-    FILE * my_history_file; //a+ creates and allows read write. r+ does not create new!, and w+ will truncate
+    FILE * my_history_file = fopen(my_history_path, "a+"); // Open it originally so we can load history
+
+    // Load the history for me: Print the file, and then you are now chatting
+    // Find the size of the file
+    fseek(my_history_file, 0, SEEK_END);
+    long file_size = ftell(my_history_file);
+    rewind(my_history_file);
+
+    // Allocate memory for the buffer to hold the entire file
+    char* history = (char*)malloc(file_size + 1); // Add 1 for null terminator
+
+    if (history != NULL) {
+        // Read the entire file into the buffer
+        size_t result = fread(history, 1, file_size, my_history_file);
+        history[file_size] = '\0'; // Null terminate
+
+        // Send the chat history, along with you are now chatting msg
+        char message[(client.recip_socket == -1? 7: 6) + strlen(history) + 30]; // OFFLINE/ONLINE size, history size, your now chatting size
+        snprintf(message, sizeof(message), "%s* Now chatting with %s (%s)", history, client.recip_name, (client.recip_socket == -1? "OFFLINE": "ONLINE") );
+        send(client.socket, message, sizeof(message), 0);
+
+        free(history);
+    } else {
+        perror("Memory allocation failed");
+    }
 
    
-    // Create a file for the target user's history with this user
+    // Open a file for the target user's history with this user
     char their_history_path[strlen(HISTORY_DIR) + strlen(client.recip_name) + strlen(client.name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
     snprintf(their_history_path, sizeof(their_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.recip_name, client.name);
     FILE * their_history_file;
 
-    
+
     // Handle chat functionality
     while (1) {
         memset(buffer, 0, sizeof(buffer));
@@ -277,7 +302,6 @@ void* handle_client(void* arg) {
 
         // Free memory for message string
         free(message);
-        
         
     }
 
@@ -398,9 +422,6 @@ void sendUserNamesToClient(int clientSocket) {
 
     if (numUsers == 1)
     {
-        // Send message that no users exist.
-        // We will notify you when they do.
-
         send(clientSocket, "No users exist yet!\nWill notify you when they do...\n", 53, 0);
     }
 
@@ -408,14 +429,14 @@ void sendUserNamesToClient(int clientSocket) {
     int valid_res = 0;
     do
     {
-        char buffer[2];
+        char buffer[5]; // To hold client index
         int index;
-
 
         memset(buffer, 0, sizeof(buffer));
 
         // Receive the index from the client
-        ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+        ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+        buffer[bytesRead] = '\0';
 
         if (bytesRead == -1) {
             perror("Error receiving data from the client");
@@ -490,13 +511,7 @@ void sendUserNamesToClient(int clientSocket) {
                 // But the message just goes straight to the chat history until user comes online
           
                 if (strcmp(client.name, recip_client.recip_name) == 0)
-                { // We are trying to chat with each other
-
-                    // Send you are now chatting message
-                    char message[38 + strlen(usernames[index - 1])];
-                    snprintf(message, sizeof(message), "* You are now chatting with %s (ONLINE)", usernames[index - 1]);
-                    send(client.socket, message, strlen(message), 0);
-
+                { 
                     // We are both trying to chat with each other. Link the sockets
                     client.recip_socket = recip_client.socket;
                     recip_client.recip_socket = client.socket;
@@ -510,12 +525,6 @@ void sendUserNamesToClient(int clientSocket) {
                 }
                 else
                 {
-                    // This user was not waiting to chat for me
-                    // Send you are now chatting message
-                    char message[39 + strlen(usernames[index - 1])];
-                    snprintf(message, sizeof(message), "* You are now chatting with %s (OFFLINE)", usernames[index - 1]);
-                    send(client.socket, message, strlen(message), 0);
-
                     // I am in the chat room alone, I can not set my recip socket.
                     // When they come online and join the chat, the above chain will execute
                     // and set each parties recip_socket to allow msgs to be forwarded.
@@ -536,7 +545,7 @@ void sendUserNamesToClient(int clientSocket) {
 
                 }
                 else{
-                    snprintf(message, sizeof(message), "Invalid choice: %d\n", index);
+                    snprintf(message, sizeof(message), "Invalid choice: %d", index);
                     send(client.socket, message, strlen(message), 0);
                 }
                 char message[50];
