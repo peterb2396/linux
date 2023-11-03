@@ -14,9 +14,6 @@
 #define MAX_PASS_LENGTH 20
 #define PORT 12345
 
-// TODO:
-// Dont allow user to chat with themselves
-
 typedef struct {
     int socket;
     char name[MAX_NAME_LENGTH + 1]; // Allow null terminator
@@ -338,8 +335,11 @@ int register_user(int client_socket, char* username, char* password) {
     //Notify all users who are not in a chat that a new user option is available
     for(int i = 0; i < num_users; i++)
     {
+        // For every client
         Client client = active_users[i];
-        if (strlen(client.recip_name) == 0)
+
+        // If this client has no recip and is not myself
+        if (!strlen(client.recip_name) && strcmp(client.name, username)) 
         {
             send(client.socket, "0", 2, 0); // Trigger refresh list
         }
@@ -364,10 +364,7 @@ void sendUserNamesToClient(int clientSocket) {
     // Find the client
     Client client = findClientBySocket(clientSocket);
 
-    // Send and wait for ACK below
-    char message[strlen(client.name) + 46];
-    snprintf(message, sizeof(message), "<INFO>Welcome, %s! Choose a recipient:</INFO>", client.name);
-    send(client.socket, message, sizeof(message), 0);
+    
 
     // Read, display, and store usernames from the file
     char line[MAX_NAME_LENGTH + MAX_PASS_LENGTH + 1];
@@ -375,8 +372,17 @@ void sendUserNamesToClient(int clientSocket) {
         char *user = strtok(line, ":");
 
         // Send user as an option if not themself
-        if (user != NULL) {// && strcmp(user, client.name) != 0
+        if (user != NULL && strcmp(user, client.name) != 0) {// && strcmp(user, client.name) != 0
             usernames[numUsers] = strdup(user);  // Store the username
+
+            // If this is the first other user, display a welcome message
+            if (numUsers == 0)
+            {
+                // Send and wait for ACK below, since the first user exists
+                char welcome_msg[strlen(client.name) + 46];
+                snprintf(welcome_msg, sizeof(welcome_msg), "<INFO>Welcome, %s! Choose a recipient:</INFO>", client.name);
+                send(client.socket, welcome_msg, sizeof(welcome_msg), 0);
+            }
 
             // Send username as an option
             char message[MAX_NAME_LENGTH + 32];
@@ -400,12 +406,12 @@ void sendUserNamesToClient(int clientSocket) {
 
     fclose(file);
 
-    if (numUsers == 1)
+    if (numUsers == 0)
     {
+        // Dont send with ACK or the ACK will be read in the do while loop instead of waiting
         send(clientSocket, "<info>No users exist yet!\nWill notify you when they do...</info>", 65, 0);
     }
 
-   
     
 
     // Listen for client response
@@ -455,7 +461,7 @@ void sendUserNamesToClient(int clientSocket) {
             return;
         }
         // They can not make a selection, no users exist
-        else if (numUsers == 1)
+        else if (numUsers == 0)
         {
             send(clientSocket, "<INFO>No users exist yet!\nWill notify you when they do...</INFO>", 65, 0);
         }
@@ -479,10 +485,6 @@ void sendUserNamesToClient(int clientSocket) {
 
                 modifyClient(client);
 
-                // Send with <INFO> the chat history to client.socket
-                // Note ACK is necessary
-
-                
 
                 // Link users together, or notify that the other user is not online.
                 // Messages can always be sent even if other user is offline,
@@ -524,8 +526,11 @@ void sendUserNamesToClient(int clientSocket) {
                     // return;
 
                 }
-                else{
-                    snprintf(message, sizeof(message), "Invalid choice: %d (max %d)", index, numUsers);
+                else // Their choice was invalid
+                {
+                    char message[19];
+                    memset(message, 0, sizeof(message));
+                    snprintf(message, sizeof(message), "Invalid choice: %d", index);
                     send(client.socket, message, strlen(message), 0);
                 }
                 char message[50];
