@@ -27,11 +27,8 @@ char * CRC(char * data_in) {
     strncpy(currentDividendChunk, data, strlen(generator));
 
     // Initialize first dividend
-	for(int i = 0; i < strlen(generator); i++) 
-		currentDividendChunk[i] = data[i];
-    
-    
-	
+	// for(int i = 0; i < strlen(generator); i++) 
+	// 	currentDividendChunk[i] = data[i];
     
 	// Division Loop
 	for(int i = strlen(padding); i < strlen(data); i++) {
