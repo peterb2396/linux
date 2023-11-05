@@ -26,6 +26,11 @@ int frameChunk(int frame_pipe[2])
     control[1] = (char)22;  // Second SYN character
     control[2] = (char)num_read;  // Length
 
+    // char res[num_read + 3];
+    // sprintf(res, "%c%c%c%s", (char)22, (char)22, (char)num_read, buffer);
+    
+    // int ress = write(frame_pipe[1], res, num_read + 3);
+
     // Send ctrl characters through the pipe. Then, send the data block
     write(frame_pipe[1], control, sizeof(control));
     write(frame_pipe[1], buffer, num_read);

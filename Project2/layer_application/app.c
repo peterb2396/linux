@@ -300,7 +300,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                                 // Parent reads result from the child process (the encoded frame)
                                 // Add space for control chars and bit conversion
-                                char encoded_frame[(FRAME_LEN + 3) * 8]; // The encoded frame
+                                char encoded_frame[(FRAME_LEN + 3) * 8 + 32]; // The encoded frame
                                     
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
@@ -368,119 +368,120 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 // *** CONSUMER SENDS DATA THRU PIPE AND HERE WE WAIT ON IT AND
                                 // *** CONTINUE PROCESSING TO CREATE THE .DONE FILE AS REQUESTED
 
-                                char message[67 * 8]; // encoded stream (usually) from main pipe
-                                memset(message, 0, sizeof(message));
-                                ssize_t bytes_read = read(ctop_pipe[0], message, sizeof(message));
+                                // Add 32 space to decode the CRC bits
+                                // char message[(FRAME_LEN + 3) * 8 + 32]; // encoded stream (usually) from main pipe
+                                // memset(message, 0, sizeof(message));
+                                // ssize_t bytes_read = read(ctop_pipe[0], message, sizeof(message));
                             
-                                // Pipe before forking to share a pipe for 
-                                // transmission of data
+                                // // Pipe before forking to share a pipe for 
+                                // // transmission of data
 
-                                int decode_pipe[2];
-                                if (pipe(decode_pipe) == -1) {
-                                    perror("pipe");
-                                    exit(EXIT_FAILURE);
-                                }
+                                // int decode_pipe[2];
+                                // if (pipe(decode_pipe) == -1) {
+                                //     perror("pipe");
+                                //     exit(EXIT_FAILURE);
+                                // }
                                 
-                                // Attempt to fork so child can exec the subroutine
-                                fflush(stdout);
-                                pid_t decode_pid = fork();
-                                if (decode_pid == -1) {
-                                    perror("fork");
-                                    exit(EXIT_FAILURE);
-                                }
-                                // Decode this single frame
-                                if (decode_pid == 0)
-                                {
-                                    // Make string versions of the pipe id's to pass to argv
-                                    char decode_read[10]; // Buffer for converting arg1 to a string
-                                    char decode_write[10]; // Buffer for converting arg2 to a string
+                                // // Attempt to fork so child can exec the subroutine
+                                // fflush(stdout);
+                                // pid_t decode_pid = fork();
+                                // if (decode_pid == -1) {
+                                //     perror("fork");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // // Decode this single frame
+                                // if (decode_pid == 0)
+                                // {
+                                //     // Make string versions of the pipe id's to pass to argv
+                                //     char decode_read[10]; // Buffer for converting arg1 to a string
+                                //     char decode_write[10]; // Buffer for converting arg2 to a string
 
-                                    // Convert integers to strings
-                                    snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
-                                    snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
+                                //     // Convert integers to strings
+                                //     snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
+                                //     snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
                                     
-                                    // Child process: Call encode then die
-                                    execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, CRC_FLAG, NULL);
-                                    perror("execl");  // If execl fails
-                                    exit(EXIT_FAILURE);
-                                }
-                                else // Parent
-                                {
-                                    // Write data to be decoded through decode pipe
-                                    size_t bytes = write(decode_pipe[1], message, bytes_read);
+                                //     // Child process: Call encode then die
+                                //     execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, CRC_FLAG, NULL);
+                                //     perror("execl");  // If execl fails
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // else // Parent
+                                // {
+                                //     // Write data to be decoded through decode pipe
+                                //     size_t bytes = write(decode_pipe[1], message, bytes_read);
                                     
-                                    close(decode_pipe[1]);  // Done writing frame to be decoded
+                                //     close(decode_pipe[1]);  // Done writing frame to be decoded
 
-                                    // When child is done, read result
-                                    waitpid(decode_pid, NULL, 0);;
+                                //     // When child is done, read result
+                                //     waitpid(decode_pid, NULL, 0);;
                                     
-                                    // Parent reads result from the child process (the decoded frame)
-                                    char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
+                                //     // Parent reads result from the child process (the decoded frame)
+                                //     char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
                                      
-                                    // Listen for & store decoded frame
-                                    int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
-                                    close(decode_pipe[0]);  // Done reading encode data
+                                //     // Listen for & store decoded frame
+                                //     int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
+                                //     close(decode_pipe[0]);  // Done reading encode data
                                     
-                                    // Here, we have the decoded frame!
+                                //     // Here, we have the decoded frame!
 
-                                    // Now, it's time to deframe it back to a chunk.
+                                //     // Now, it's time to deframe it back to a chunk.
 
-                                    // Create a pipe to communicate with deframe.c
-                                    int deframe_pipe[2];
-                                    if (pipe(deframe_pipe) == -1) {
-                                        perror("pipe");
-                                        exit(EXIT_FAILURE);
-                                    }
-                                    fflush(stdout);
-                                    pid_t deframe_pid = fork();
+                                //     // Create a pipe to communicate with deframe.c
+                                //     int deframe_pipe[2];
+                                //     if (pipe(deframe_pipe) == -1) {
+                                //         perror("pipe");
+                                //         exit(EXIT_FAILURE);
+                                //     }
+                                //     fflush(stdout);
+                                //     pid_t deframe_pid = fork();
 
-                                    if (deframe_pid == -1) {
-                                        perror("fork");
-                                        exit(EXIT_FAILURE);
-                                    }
+                                //     if (deframe_pid == -1) {
+                                //         perror("fork");
+                                //         exit(EXIT_FAILURE);
+                                //     }
 
-                                    if (deframe_pid == 0) {
-                                        char deframe_read[10]; // Buffer for converting arg1 to a string
-                                        char deframe_write[10]; // Buffer for converting arg2 to a string
+                                //     if (deframe_pid == 0) {
+                                //         char deframe_read[10]; // Buffer for converting arg1 to a string
+                                //         char deframe_write[10]; // Buffer for converting arg2 to a string
 
-                                        // Convert integers to strings
-                                        snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
-                                        snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
+                                //         // Convert integers to strings
+                                //         snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
+                                //         snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
                                         
-                                        // Child process (deframe.c)
-                                        execl("../layer_data-link/deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
-                                        perror("execl");  // If execl fails
-                                        exit(EXIT_FAILURE);
-                                    } else {
-                                        // Parent process
-                                        // Write data to be framed to deframe.c through the deframe pipe
-                                        write(deframe_pipe[1], decoded_frame, decoded_len);
-                                        close(deframe_pipe[1]);
+                                //         // Child process (deframe.c)
+                                //         execl("../layer_data-link/deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
+                                //         perror("execl");  // If execl fails
+                                //         exit(EXIT_FAILURE);
+                                //     } else {
+                                //         // Parent process
+                                //         // Write data to be framed to deframe.c through the deframe pipe
+                                //         write(deframe_pipe[1], decoded_frame, decoded_len);
+                                //         close(deframe_pipe[1]);
 
-                                        // When child is done, read chunk (ctrl chars removed)
-                                        waitpid(deframe_pid, NULL, 0);;
-                                        char chunk[FRAME_LEN + 1]; // The frame to be recieved will be stored here
+                                //         // When child is done, read chunk (ctrl chars removed)
+                                //         waitpid(deframe_pid, NULL, 0);;
+                                //         char chunk[FRAME_LEN + 1]; // The frame to be recieved will be stored here
 
-                                        int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
-                                        close(deframe_pipe[0]); 
+                                //         int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
+                                //         close(deframe_pipe[0]); 
                                         
 
-                                        // Null-terminate
-                                        if (chunk_len > 0) {
-                                            if (chunk_len < sizeof(chunk)) { //FRAME_LEN < 65
-                                                chunk[chunk_len] = '\0';
-                                            } else {
-                                                printf("WARNING! chunk size too small, overwrote last char. len: %d\n", chunk_len);
-                                                chunk[sizeof(chunk) - 1] = '\0';
-                                            }
-                                        }
+                                //         // Null-terminate
+                                //         if (chunk_len > 0) {
+                                //             if (chunk_len < sizeof(chunk)) { //FRAME_LEN < 65
+                                //                 chunk[chunk_len] = '\0';
+                                //             } else {
+                                //                 printf("WARNING! chunk size too small, overwrote last char. len: %d\n", chunk_len);
+                                //                 chunk[sizeof(chunk) - 1] = '\0';
+                                //             }
+                                //         }
 
 
-                                        fwrite(chunk, 1, chunk_len, doneFile);
-                                    }
+                                //         fwrite(chunk, 1, chunk_len, doneFile);
+                                //     }
                                         
                                     
-                                }// end section write-back to consumer
+                                // }// end section write-back to consumer
                                 
                                 
                             }
@@ -513,11 +514,13 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     FILE* outfFile;
     FILE* chckFile;
 
-    char message[67 * 8]; // encoded stream (usually) from main pipe
+    // Now add 32 bits for CRC
+    char message[(67 * 8) + 32]; // encoded stream (usually) from main pipe
     char *inpf;           // name of input file currently being processed
 
     while (1) {
         ssize_t bytes_read = read(ptoc_pipe[0], message, sizeof(message));
+
 
         if (bytes_read <= 0) {
             break; // End of processing
@@ -601,8 +604,9 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 waitpid(decode_pid, NULL, 0);;
 
                 // Parent reads result from the child process (the decoded frame)
-                char decoded_frame[67]; // The decoded frame is 1/8 the size
+                char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
                     // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
+                    // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data
 
                 // Listen for & store decoded frame
                 int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
@@ -642,6 +646,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                     // Parent process
                     // Write data to be framed to deframe.c through the deframe pipe
                     write(deframe_pipe[1], decoded_frame, decoded_len);
+                    
                     close(deframe_pipe[1]);
 
                     // When child is done, read chunk (ctrl chars removed)
@@ -661,170 +666,174 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                             chunk[sizeof(chunk) - 1] = '\0';
                         }
                     }
+                    fwrite(chunk, sizeof(char), chunk_len, outfFile);
 
 
-                    // Create a pipe to communicate with capitalize.c
-                    int uppercase_pipe[2];
-                    if (pipe(uppercase_pipe) == -1) {
-                        perror("pipe");
-                        exit(EXIT_FAILURE);
-                    }
-                    fflush(stdout);
-                    pid_t uppercase_pid = fork();
+                    // // Create a pipe to communicate with capitalize.c
+                    // int uppercase_pipe[2];
+                    // if (pipe(uppercase_pipe) == -1) {
+                    //     perror("pipe");
+                    //     exit(EXIT_FAILURE);
+                    // }
+                    // fflush(stdout);
+                    // pid_t uppercase_pid = fork();
 
-                    if (uppercase_pid == -1) {
-                        perror("fork");
-                        exit(EXIT_FAILURE);
-                    }
+                    // if (uppercase_pid == -1) {
+                    //     perror("fork");
+                    //     exit(EXIT_FAILURE);
+                    // }
 
-                    if (uppercase_pid == 0) {
+                    // if (uppercase_pid == 0) {
 
-                        char uppercase_read[10]; // Buffer for converting arg1 to a string
-                        char uppercase_write[10]; // Buffer for converting arg2 to a string
+                    //     char uppercase_read[10]; // Buffer for converting arg1 to a string
+                    //     char uppercase_write[10]; // Buffer for converting arg2 to a string
 
-                        // Convert integers to strings
-                        snprintf(uppercase_read, sizeof(uppercase_read), "%d", uppercase_pipe[0]);
-                        snprintf(uppercase_write, sizeof(uppercase_write), "%d", uppercase_pipe[1]);
+                    //     // Convert integers to strings
+                    //     snprintf(uppercase_read, sizeof(uppercase_read), "%d", uppercase_pipe[0]);
+                    //     snprintf(uppercase_write, sizeof(uppercase_write), "%d", uppercase_pipe[1]);
                         
-                        // Child process (uppercase.c)
-                        execl("../layer_physical/uppercaseService", "uppercaseService", uppercase_read, uppercase_write, NULL);  // Execute deframe.c
-                        perror("execl");  // If execl fails
-                        exit(EXIT_FAILURE);
-                    } else {
-                        // Parent process
-                        // Write chunk to be capped to uppercase.c through the uppercase pipe
-                        write(uppercase_pipe[1], chunk, chunk_len);
-                        close(uppercase_pipe[1]); 
+                    //     // Child process (uppercase.c)
+                    //     execl("../layer_physical/uppercaseService", "uppercaseService", uppercase_read, uppercase_write, NULL);  // Execute deframe.c
+                    //     perror("execl");  // If execl fails
+                    //     exit(EXIT_FAILURE);
+                    // } else {
+                    //     // Parent process
+                    //     // Write chunk to be capped to uppercase.c through the uppercase pipe
+                    //     write(uppercase_pipe[1], chunk, chunk_len);
+                    //     close(uppercase_pipe[1]); 
 
-                        // When child is done, read chunk (capitalized)
-                        waitpid(uppercase_pid, NULL, 0);
-                        char cap_chunk[FRAME_LEN + 2]; // The capital chunk
-                        int cap_chunk_len = read(uppercase_pipe[0], cap_chunk, sizeof(cap_chunk));
-                        close(uppercase_pipe[0]); 
+                    //     // When child is done, read chunk (capitalized)
+                    //     waitpid(uppercase_pid, NULL, 0);
+                    //     char cap_chunk[FRAME_LEN + 2]; // The capital chunk
+                    //     int cap_chunk_len = read(uppercase_pipe[0], cap_chunk, sizeof(cap_chunk));
+                    //     close(uppercase_pipe[0]); 
                         
 
-                        // Penultimately, write to .outf
+                    //     // Penultimately, write to .outf
                         
-                        fwrite(cap_chunk, 1, cap_chunk_len, outfFile);
+                    //     fwrite(cap_chunk, 1, cap_chunk_len, outfFile);
 
 
                         // *** .chck PROCESS ***
 
                         // First, frame the data chunk again
                         
+
                         
                         // Create a pipe to communicate with frame.c
-                        int frame_pipe[2];
-                        if (pipe(frame_pipe) == -1) {
-                            perror("pipe");
-                            exit(EXIT_FAILURE);
-                        }
-                        fflush(stdout);
-                        pid_t frame_pid = fork();
+                        // int frame_pipe[2];
+                        // if (pipe(frame_pipe) == -1) {
+                        //     perror("pipe");
+                        //     exit(EXIT_FAILURE);
+                        // }
+                        // fflush(stdout);
+                        // pid_t frame_pid = fork();
 
-                        if (frame_pid == -1) {
-                            perror("fork");
-                            exit(EXIT_FAILURE);
-                        }
+                        // if (frame_pid == -1) {
+                        //     perror("fork");
+                        //     exit(EXIT_FAILURE);
+                        // }
 
-                        if (frame_pid == 0) {
+                        // if (frame_pid == 0) {
 
-                            char frame_read[10]; // Buffer for converting arg1 to a string
-                            char frame_write[10]; // Buffer for converting arg2 to a string
+                        //     char frame_read[10]; // Buffer for converting arg1 to a string
+                        //     char frame_write[10]; // Buffer for converting arg2 to a string
 
-                            // Convert integers to strings
-                            snprintf(frame_read, sizeof(frame_read), "%d", frame_pipe[0]);
-                            snprintf(frame_write, sizeof(frame_write), "%d", frame_pipe[1]);
+                        //     // Convert integers to strings
+                        //     snprintf(frame_read, sizeof(frame_read), "%d", frame_pipe[0]);
+                        //     snprintf(frame_write, sizeof(frame_write), "%d", frame_pipe[1]);
                             
-                            // Child process (frame.c)
-                            execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, NULL);  // Execute frame.c
-                            perror("execl");  // If execl fails
-                            exit(EXIT_FAILURE);
-                        } else {
-                            // Parent process
-                            // Write data to be framed to frame.c through the frame pipe
-                            write(frame_pipe[1], cap_chunk, cap_chunk_len);
-                            close(frame_pipe[1]);  // Close the write end of the frame pipe
+                        //     // Child process (frame.c)
+                        //     execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, NULL);  // Execute frame.c
+                        //     perror("execl");  // If execl fails
+                        //     exit(EXIT_FAILURE);
+                        // } else {
+                        //     // Parent process
+                        //     // Write data to be framed to frame.c through the frame pipe
+                        //     write(frame_pipe[1], cap_chunk, cap_chunk_len);
+                        //     close(frame_pipe[1]);  // Close the write end of the frame pipe
 
-                            // When child is done, read
-                            waitpid(frame_pid, NULL, 0);
-                            // Parent reads result from the child process (the new frame)
-                            char frame[68]; // The frame to be recieved will be stored here
+                        //     // When child is done, read
+                        //     waitpid(frame_pid, NULL, 0);
+                        //     // Parent reads result from the child process (the new frame)
+                        //     char frame[68]; // The frame to be recieved will be stored here
 
-                            // Listen for frame result
-                            int frame_len = read(frame_pipe[0], frame, sizeof(frame));
-                            close(frame_pipe[0]);  // Close the read end of the frame pipe
+                        //     // Listen for frame result
+                        //     int frame_len = read(frame_pipe[0], frame, sizeof(frame));
+                        //     close(frame_pipe[0]);  // Close the read end of the frame pipe
+                        //     //printf("FRAME: %s\n", frame);
 
-                            // Null-terminate
-                            if (frame_len > 0) {
-                                if (frame_len < sizeof(frame)) {
-                                    frame[frame_len] = '\0';
-                                } else {
-                                    frame[sizeof(frame) - 1] = '\0';
-                                }
-                            }
-                            // At this point, we have recieved the frame and can encode it.
-                            // Pipe before forking to share a pipe for 
-                            // transmission of encoding data
-                            int encode_pipe[2];
-                            if (pipe(encode_pipe) == -1) {
-                                perror("pipe");
-                                exit(EXIT_FAILURE);
-                            }
+                        //     // Null-terminate
+                        //     if (frame_len > 0) {
+                        //         if (frame_len < sizeof(frame)) {
+                        //             frame[frame_len] = '\0';
+                        //         } else {
+                        //             frame[sizeof(frame) - 1] = '\0';
+                        //         }
+                        //     }
+                        //     // At this point, we have recieved the frame and can encode it.
+                        //     // Pipe before forking to share a pipe for 
+                        //     // transmission of encoding data
+                        //     int encode_pipe[2];
+                        //     if (pipe(encode_pipe) == -1) {
+                        //         perror("pipe");
+                        //         exit(EXIT_FAILURE);
+                        //     }
                             
-                            // Attempt to fork so child can exec the subroutine
-                            fflush(stdout);
-                            pid_t encode_pid = fork();
-                            if (encode_pid == -1) {
-                                perror("fork");
-                                exit(EXIT_FAILURE);
-                            }
-                            // Encode this single frame
-                            if (encode_pid == 0)
-                            {
-                                // Make string versions of the pipe id's to pass to argv
-                                char encode_read[10]; // Buffer for converting arg1 to a string
-                                char encode_write[10]; // Buffer for converting arg2 to a string
+                        //     // Attempt to fork so child can exec the subroutine
+                        //     fflush(stdout);
+                        //     pid_t encode_pid = fork();
+                        //     if (encode_pid == -1) {
+                        //         perror("fork");
+                        //         exit(EXIT_FAILURE);
+                        //     }
+                        //     // Encode this single frame
+                        //     if (encode_pid == 0)
+                        //     {
+                        //         // Make string versions of the pipe id's to pass to argv
+                        //         char encode_read[10]; // Buffer for converting arg1 to a string
+                        //         char encode_write[10]; // Buffer for converting arg2 to a string
 
-                                // Convert integers to strings
-                                snprintf(encode_read, sizeof(encode_read), "%d", encode_pipe[0]);
-                                snprintf(encode_write, sizeof(encode_write), "%d", encode_pipe[1]);
+                        //         // Convert integers to strings
+                        //         snprintf(encode_read, sizeof(encode_read), "%d", encode_pipe[0]);
+                        //         snprintf(encode_write, sizeof(encode_write), "%d", encode_pipe[1]);
                                 
-                                // Child process: Call encode then die
-                                execl("../layer_physical/encodeService", "encodeService", encode_read, encode_write, CRC_FLAG, NULL);
-                                perror("execl");  // If execl fails
-                                exit(EXIT_FAILURE);
-                            }
-                            else
-                            {
-                                // Write data to be encoded through encode pipe
-                                write(encode_pipe[1], frame, frame_len);
-                                close(encode_pipe[1]);  // Done writing frame to be encoded
+                        //         // Child process: Call encode then die
+                        //         execl("../layer_physical/encodeService", "encodeService", encode_read, encode_write, CRC_FLAG, NULL);
+                        //         perror("execl");  // If execl fails
+                        //         exit(EXIT_FAILURE);
+                        //     }
+                        //     else
+                        //     {
+                        //         // Write data to be encoded through encode pipe
+                        //         int res2 = write(encode_pipe[1], frame, frame_len);
+                        //         //printf("2: %d\n", res2);
+                        //         close(encode_pipe[1]);  // Done writing frame to be encoded
 
-                                // When child is done, read result
-                                waitpid(encode_pid, NULL, 0);
+                        //         // When child is done, read result
+                        //         waitpid(encode_pid, NULL, 0);
 
-                                // Parent reads result from the child process (the encoded frame)
-                                char encoded_frame[(FRAME_LEN + 3) * 8]; // The encoded frame
+                        //         // Parent reads result from the child process (the encoded frame)
+                        //         char encoded_frame[(FRAME_LEN + 3) * 8 + 32]; // The encoded frame
                              
-                                // Listen for & store encoded frame
-                                int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
-                                close(encode_pipe[0]);  // Done reading encode data
+                        //         // Listen for & store encoded frame
+                        //         int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
+                        //         close(encode_pipe[0]);  // Done reading encode data
 
-                                // Here, we have the encoded_frame!
+                        //         // Here, we have the encoded_frame!
 
                                
-                                // Write the encoded frame to the file, AND to the producer to decode!
+                        //         // Write the encoded frame to the file, AND to the producer to decode!
 
-                                fwrite(encoded_frame, sizeof(char), encoded_len, chckFile);
-                                write(ctop_pipe[1], encoded_frame, encoded_len);
+                        //         fwrite(encoded_frame, sizeof(char), encoded_len, chckFile);
+                        //         write(ctop_pipe[1], encoded_frame, encoded_len);
 
                                 
-                            }
+                        //     }
                             
-                        }
+                        // }
                     
-                    }
+                    //}
                 
             }
 
