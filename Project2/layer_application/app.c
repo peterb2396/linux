@@ -162,7 +162,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     srand(seed);
 
                     // between 0 and frames - 1
-                    int random_frame = 14;//rand() % frames;
+                    int random_frame = rand() % frames;
                     printf("Malformed frame: %d\n", random_frame + 1);
 
 
