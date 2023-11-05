@@ -728,11 +728,6 @@ int sendUserNamesToClient(int client_socket) {
                 Client client = findClientBySocket(client_socket);
                 Client recip_client = findClientByName(usernames[index - 1]);
 
-                // Notify the client they are now chatting
-                // Purpose is now their messages will be ENCODED
-                send(client_socket, "<INFO>chatting</INFO>", 22, 0);
-                
-
                 // Set the client's recip_name to this
                 strncpy(client.recip_name, usernames[index - 1], sizeof(usernames[index - 1]));
                 client.recip_name[sizeof(client.recip_name) - 1] = '\0';

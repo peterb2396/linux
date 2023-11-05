@@ -191,8 +191,7 @@ void sendMessages(int server_socket, int pipefd[2])
         // If the user is chatting, encode and send it.
         // Otherwise, it's initialization data, just send it.
         // (we dont want to malform their login info)
-        printf("CHATTING? %d\n", chatting);
-        if (chatting)
+        if (chatting && 0)
         {
         
             //char * encoded_message = encodeMessage(message, CRC);
