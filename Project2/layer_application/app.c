@@ -67,7 +67,6 @@ int main() {
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     DIR* dir;
     struct dirent* ent;
-    FILE *doneFile;
     FILE *binfFile;
     FILE *frmeFile;
 
@@ -133,16 +132,6 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                         return;
                     }
 
-                    // prepare file.done
-                    char done_file_name[50]; 
-                    snprintf(done_file_name, sizeof(done_file_name), "../output/%s/%s.done", inpf, inpf);
-                    doneFile = fopen(done_file_name, "w");
-
-                    if (doneFile == NULL) {
-                        perror("Error opening done file");
-                        fclose(input_file); // close the input fd to avoid mem leaks
-                        return;
-                    }
 
 
                         // *** ALL FILES ARE NOW CREATED AND REFERENCED ***
@@ -393,7 +382,6 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     
     // Define file pointers
     FILE* outfFile;
-    FILE* chckFile;
 
     // Now add 32 bits for CRC
     char message[(67 * 8) + 32]; // encoded stream (usually) from main pipe
@@ -427,15 +415,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 return;
             }
 
-            // prepare file.chck
-            char chck_file_name[50]; 
-            snprintf(chck_file_name, sizeof(chck_file_name), "../output/%s/%s.chck", inpf, inpf);
-            chckFile = fopen(chck_file_name, "w");
-
-            if (chckFile == NULL) {
-                perror("Error opening binf file");
-                return;
-            }
+         
 
         }
         else // we are reading data
@@ -555,5 +535,4 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     fseek(outfFile, -1, SEEK_END);
     ftruncate(fileno(outfFile), ftell(outfFile));
     fclose(outfFile);
-    fclose(chckFile);
 }
