@@ -30,7 +30,7 @@ int checkCRC(char * data) {
 
     // Initialize dividend
     strncpy(currentDividendChunk, data, strlen(generator));
-    int j = 0;
+    int count = 1;
 
     // Division Loop
     for (int e = strlen(generator) - 1; e < strlen(data); e++) {
@@ -52,6 +52,8 @@ int checkCRC(char * data) {
     }
 
     // Check if the remainder is all zeros
+    for (int j = 0; j < count; j++)
+    {
         if (remainder[j] != '0') {
             // If any non-zero remainder is found, an error is detected
             printf("CRC DETECTED ERROR! Remainder: %s\n", remainder);
@@ -60,7 +62,7 @@ int checkCRC(char * data) {
             
             return 1; // Error detected
         }
-    
+    }
 
     // No non-zero remainder found, no error detected
     free(remainder);

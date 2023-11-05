@@ -162,7 +162,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     srand(seed);
 
                     // between 0 and frames - 1
-                    int random_frame = rand() % frames;
+                    int random_frame = 14;//rand() % frames;
                     printf("Malformed frame: %d\n", random_frame + 1);
 
 
@@ -219,6 +219,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             
                             // Parent reads result from the child process (the new frame)
                             char frame[68]; // The frame to be recieved will be stored here
+                            bzero(frame, sizeof(frame));
 
                             // Read frame result
                             int frame_len = read(frame_pipe[0], frame, sizeof(frame));
@@ -290,6 +291,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 // Parent reads result from the child process (the encoded frame)
                                 // Add space for control chars and bit conversion
                                 char encoded_frame[(FRAME_LEN + 3) * 8 + 32]; // The encoded frame
+                                bzero(encoded_frame, sizeof(encoded_frame));
+                                // Otherwise, would have old bytes in it
                                     
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
@@ -334,7 +337,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                     else //parent
                                     {
                                         // Write data to be serviced (the correct encoded frame) through service pipe
-                                        write(malform_pipe[1], encoded_frame, sizeof(encoded_frame));
+                            
+                                        write(malform_pipe[1], encoded_frame, strlen(encoded_frame));
                                         close(malform_pipe[1]);  // Done writing frame to be serviced
 
                                         // When child is done, read result
@@ -466,6 +470,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
 
                 // Parent reads result from the child process (the decoded frame)
                 char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
+                bzero(decoded_frame, sizeof(decoded_frame));
                     // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
                     // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data
 
@@ -513,6 +518,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                     // When child is done, read chunk (ctrl chars removed)
                     waitpid(deframe_pid, NULL, 0);;
                     char chunk[FRAME_LEN]; // The frame to be recieved will be stored here
+                    bzero(chunk, sizeof(chunk));
 
                     int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
                     close(deframe_pipe[0]); 

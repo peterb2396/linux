@@ -17,6 +17,7 @@ int malformFrame(int malform_pipe[2])
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
+ 
     close(malform_pipe[0]); 
 
     // Choose a bit to flip
