@@ -69,13 +69,8 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     close(encode_pipe[0]); 
 
     // The data 
-    char data[(FRAME_LEN + 3) * 8 + 1]; // +1 for CRC flag
+    char data[(FRAME_LEN + 3) * 8];
     memset(data, 0, strlen(data));
-
-    // Append CRC flag
-    char crc_flag_string[2];
-    sprintf(crc_flag_string, "%d", crc_flag);
-    strcat(data, crc_flag_string);
 
     for (int i = 0; i < num_read; i++) {
         char ch = buffer[i];

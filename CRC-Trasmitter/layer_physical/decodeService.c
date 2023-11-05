@@ -73,18 +73,16 @@ int checkCRC(char * data) {
 
 // Takes an encoded binary frame through the pipe and
 // returns the characters for each byte.
-int decodeFrame(int decode_pipe[2])
+int decodeFrame(int decode_pipe[2], int crc_flag)
 {
     // Add space for the data and 3 control bytes * 8 bits for each
-    // Now, also add space for 32 CRC bits and 1 crc flag 
-    char buffer[(FRAME_LEN + 3) * 8 + strlen(generator)];
+    // Now, also add space for 32 CRC bits
+    char buffer[(FRAME_LEN + 3) * 8 + strlen(generator)-1];
 
     // Read the chunk from the consumer through the decode pipe
     __ssize_t num_read = read(decode_pipe[0], buffer, sizeof(buffer));
     
-    close(decode_pipe[0]);
-
-    int crc_flag = (int)buffer[0] - 48;
+    close(decode_pipe[0]); 
 
     // Check bits for error before converting
     if(crc_flag)
@@ -130,6 +128,7 @@ int main(int argc, char* argv[]) {
     int decode_pipe[2];
     decode_pipe[0] = atoi(argv[1]); // Assign the first integer
     decode_pipe[1] = atoi(argv[2]); // Assign the second integer
+    int crc_flag = atoi(argv[3]);
     
-    return decodeFrame(decode_pipe);
+    return decodeFrame(decode_pipe, crc_flag);
 }

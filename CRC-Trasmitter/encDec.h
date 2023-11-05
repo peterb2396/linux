@@ -1,4 +1,4 @@
-int decodeFrame(int decode_pipe[2]);
+int decodeFrame(int decode_pipe[2], int crc_flag);
 int encodeFrame(int encode_pipe[2], int crc_flag);
 int frameChunk(int frame_pipe[2]);
 int deframeFrame(int deframe_pipe[2]);

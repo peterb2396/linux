@@ -5,15 +5,15 @@
 
 #include "../encDec.h"
 
-// Start after control characters (3x 8) + 1 crc bit
-#define L_BOUND 25
+// Start after control characters (3x 8)
+#define L_BOUND 24
 
 // Malforms a provided data frame by choosing
 // a random bit within it and flipping it.
 
 int malformFrame(int malform_pipe[2])
 {
-    char buffer[67 * 8 + 1 + 32]; // SPace for encoded frame
+    char buffer[67 * 8 + 32]; // SPace for encoded frame
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));

@@ -290,8 +290,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                                 // Parent reads result from the child process (the encoded frame)
                                 // Add space for control chars and bit conversion
-                                // add 1 space for crc flag, add 32 for crc bits if CRC
-                                char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + (strcmp(CRC_FLAG, "1") == 0)? 32: 0]; // The encoded frame
+                                char encoded_frame[(FRAME_LEN + 3) * 8 + 32]; // The encoded frame
                                 bzero(encoded_frame, sizeof(encoded_frame));
                                 // Otherwise, would have old bytes in it
                                     
@@ -389,7 +388,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     FILE* outfFile;
 
     // Now add 32 bits for CRC
-    char message[(67 * 8) + 1+ (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
+    char message[(67 * 8) + 32]; // encoded stream (usually) from main pipe
     char *inpf;           // name of input file currently being processed
 
     while (1) {
@@ -456,7 +455,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
                 
                 // Child process: Call encode then die
-                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, NULL);
+                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, CRC_FLAG, NULL);
                 perror("execl");  // If execl fails
                 exit(EXIT_FAILURE);
             }
