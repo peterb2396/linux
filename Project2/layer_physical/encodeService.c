@@ -12,51 +12,49 @@ char * generator = "100000100110000001001110110110111";
 // Binary by sending back one char at a time as binary
 // Also adds a parity bit for error detection
 
-char * CRC(char * data_in) {
-    printf("OG DATA:  %s\n",data_in);
-    // Make strings for remainder and dividend
-	char * remainder = calloc(strlen(generator) - 1, sizeof(char));
-	char * currentDividendChunk = calloc(strlen(generator), sizeof(char));
 
-	// Pad data with 0s
-	char * data = calloc(strlen(data_in) + strlen(generator)-1, sizeof(char));
-    sprintf(data, "%-*s%0*d", (int)strlen(generator)-1, data_in, (int)strlen(generator)-1, 0);
-    printf(".");
-	
+
+char * CRC(char * data_in) {
+    // Make strings for remainder and dividend
+    char * remainder = calloc(strlen(generator) - 1, sizeof(char));
+    char * currentDividendChunk = calloc(strlen(generator), sizeof(char));
+
+    // Pad data with 0s
+    char * data = calloc(strlen(data_in) + strlen(generator) - 1, sizeof(char));
+    sprintf(data, "%s%0*d", data_in, (int)(strlen(generator) - 1), 0);
 
     // Initialize dividend
     strncpy(currentDividendChunk, data, strlen(generator));
-    
-	// Division Loop
-	for(int e = strlen(generator)-1; e < strlen(data); e++) {
-		// XOR
-		for(int i = 1; i < strlen(generator); i++) {
-			
-			if((int)generator[i] == (int)currentDividendChunk[i]) 
-                remainder[i-1] = '0';
-				
-			else 
-                remainder[i-1] = '1';
-				
-			
-		}
+
+    // Division Loop
+    for (int e = strlen(generator) - 1; e < strlen(data); e++) {
+        // XOR
+        for (int i = 0; i < strlen(generator); i++) {
+            if (generator[i] == '1') {
+                if (currentDividendChunk[i] == '1')
+                    remainder[i] = (remainder[i] == '1') ? '0' : '1';
+                else
+                    remainder[i] = (remainder[i] == '1') ? '1' : '0';
+            } else {
+                remainder[i] = (remainder[i] == '1') ? '1' : '0';
+            }
+        }
 
         // Set next dividend (drop number down)
-		bzero(currentDividendChunk, strlen(generator));
-		strcat(currentDividendChunk, remainder);
-		currentDividendChunk[strlen(generator)-1] = data[e+1];
+        memmove(currentDividendChunk, currentDividendChunk + 1, strlen(generator) - 1);
+        currentDividendChunk[strlen(generator) - 1] = data[e + 1];
+    }
 
-	}
+    // Create a new data frame with CRC bits appended
+    char * data_with_crc = calloc(strlen(data_in) + strlen(generator) - 1, sizeof(char));
+    sprintf(data_with_crc, "%s%s", data_in, remainder);
 
-	// T = D + R (Append remainder to data)
-    bzero(data, sizeof(data));
-    sprintf(data, "%s%s", data_in, remainder);
-    printf("REMAINDER: %s\n",remainder);
-	return data;
+    free(data);
+    free(remainder);
+    free(currentDividendChunk);
+
+    return data_with_crc;
 }
-
-
-
 
 
 int encodeFrame(int encode_pipe[2], int crc_flag)

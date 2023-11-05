@@ -42,6 +42,7 @@ int malformFrame(int malform_pipe[2])
     } else if (buffer[random_bit] == '1') {
         buffer[random_bit] = '0';
     }
+
     printf("Flipped bit: %d\n", random_bit);
     fflush(stdout);
 

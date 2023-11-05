@@ -21,35 +21,53 @@ int power(int base, int exp) {
     return result;
 }
 
-char * checkCRC(char * data) {
-    printf("CHECKING: %s\n", data);
-	// Make strings for remainder and dividend
-	char * remainder = calloc(strlen(generator) - 1, sizeof(char));
-	char * currentDividendChunk = calloc(strlen(generator), sizeof(char));
+
+
+int checkCRC(char * data) {
+    // Make strings for remainder and dividend
+    char * remainder = calloc(strlen(generator) - 1, sizeof(char));
+    char * currentDividendChunk = calloc(strlen(generator), sizeof(char));
 
     // Initialize dividend
     strncpy(currentDividendChunk, data, strlen(generator));
+    int j = 0;
 
-    
-	// Division Loop
-	for(int e = strlen(generator)-1; e < strlen(data); e++) {
+    // Division Loop
+    for (int e = strlen(generator) - 1; e < strlen(data); e++) {
         // XOR
-		for(int i = 1; i < strlen(generator); i++) {
-			
-			if((int)generator[i] == (int)currentDividendChunk[i]) 
-				remainder[i-1] = '0';
-			else 
-				remainder[i-1] = '1';
-			
-		}
-            // Set next dividend (drop number down)
-			bzero(currentDividendChunk, (int)strlen(generator));
-			strcat(currentDividendChunk, remainder);
-			currentDividendChunk[strlen(generator)-1] = data[e+1];
+        for (int i = 0; i < strlen(generator); i++) {
+            if (generator[i] == '1') {
+                if (currentDividendChunk[i] == '1')
+                    remainder[i] = (remainder[i] == '1') ? '0' : '1';
+                else
+                    remainder[i] = (remainder[i] == '1') ? '1' : '0';
+            } else {
+                remainder[i] = (remainder[i] == '1') ? '1' : '0';
+            }
+        }
 
-	}
-	return remainder;
+        // Set next dividend (drop number down)
+        memmove(currentDividendChunk, currentDividendChunk + 1, strlen(generator) - 1);
+        currentDividendChunk[strlen(generator) - 1] = data[e + 1];
+    }
+
+    // Check if the remainder is all zeros
+        if (remainder[j] != '0') {
+            // If any non-zero remainder is found, an error is detected
+            printf("CRC DETECTED ERROR! Remainder: %s\n", remainder);
+            free(remainder);
+            free(currentDividendChunk);
+            
+            return 1; // Error detected
+        }
+    
+
+    // No non-zero remainder found, no error detected
+    free(remainder);
+    free(currentDividendChunk);
+    return 0; // No error detected
 }
+
 
 // Takes an encoded binary frame through the pipe and
 // returns the characters for each byte.
@@ -67,7 +85,7 @@ int decodeFrame(int decode_pipe[2], int crc_flag)
     // Check bits for error before converting
     if(crc_flag)
     {
-        printf("CRC Check: %s\n", checkCRC(buffer));
+        checkCRC(buffer);
     }
     else{
         //hamming TBD
