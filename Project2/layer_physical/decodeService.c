@@ -94,7 +94,7 @@ int decodeFrame(int decode_pipe[2], int crc_flag)
     }
 
     // For each byte... but NOT the 32/8 CRC bytes
-    for (int i = 0; i < (num_read - 32); i+=8) {
+    for (int i = 0; i < (num_read - (crc_flag? 32: 0)); i+=8) {
         int num = 0; //the ascii value of this byte
         //printf("\n");
         // For each bit in the byte

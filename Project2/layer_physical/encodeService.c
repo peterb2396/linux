@@ -75,7 +75,6 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     for (int i = 0; i < num_read; i++) {
         char ch = buffer[i];
         // Send the parity bit through the pipe, first
-        //write(encode_pipe[1], __builtin_parity((int)ch)? "0" : "1", 1);
         strcat(data, __builtin_parity((int)ch)? "0" : "1"); // add the parity bit to the encoded data string
 
         // For the next 7 bits...
@@ -86,22 +85,20 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
             sprintf(bit_str, "%d", bit);
             
             strcat(data, bit_str);
-            //write(encode_pipe[1], bit_str, 1);
         }
     }
 
     if (crc_flag)
     {
         // Send the data with CRC bits, T = D+R
-        //write(encode_pipe[1], CRC(data), strlen(data) + strlen(padding));
-        //printf("CRC: %s\n", CRC(data));
         char * crc_res = CRC(data);
-        //printf("CRC: %s\n", (CRC(data)));
         write(encode_pipe[1], crc_res, strlen(crc_res));
         
        
     }
     else{ // Hamming TBD
+    // for now just write the data with no CRC bits
+        write(encode_pipe[1], data, strlen(data));
         
     }
 
