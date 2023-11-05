@@ -28,7 +28,7 @@ int malformFrame(int malform_pipe[2])
 
 
     // Generate a random bit in the range [24, len-1]
-    int random_bit = (rand() % (num_read - L_BOUND + 1)) + L_BOUND;
+    int random_bit = (rand() % (num_read - L_BOUND)) + L_BOUND;
 
     // Make sure the bit is not a parity bit
     if (random_bit % 8 == 0)
