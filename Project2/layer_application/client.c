@@ -20,15 +20,14 @@
 #define MAX_MSG_LEN 5000
 
 
-void receiveMessages(int server_socket);
-void sendMessages(int server_socket);
-char * encodeMessage(char* message);
-char * prepareFrame(char* chunk, int malform);
+void receiveMessages(int server_socket, int pipefd[2]);
+void sendMessages(int server_socket, int pipefd[2]);
+char * encodeMessage(char* message, char* CRC);
+char * prepareFrame(char* chunk, int malform, char* CRC);
 
-int SERVER_PORT;
-int chatting = 0; // Server makes a request to modify this value when we begin a chat with someone
 char SERVER_IP[16];
-char CRC[2] = "0";
+int SERVER_PORT;
+
 
 int main(int argc, char* argv[]) {
     if (argc == 1) 
@@ -83,6 +82,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Make a pipe so send / recieve can communicate when needed.
+    // This is used when recieve gets a flag and needs to set it for send
+    int pipefd[2]; // Pipe file descriptors
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
     pid_t child_pid = fork();
     if (child_pid == -1) {
         perror("Fork failed");
@@ -91,10 +99,14 @@ int main(int argc, char* argv[]) {
 
     if (child_pid == 0) {
         // Child process: responsible for receiving messages
-        receiveMessages(server_socket);
+        close(pipefd[0]); // child doesnt need to read. We are WRITING flags from server
+        receiveMessages(server_socket, pipefd);
+        
     } else {
         // Parent process: responsible for sending messages
-        sendMessages(server_socket);
+        close(pipefd[1]); // parent doesnt need to write. We are READING flags into the client
+        sendMessages(server_socket, pipefd);
+        
     }
     
     // Process sendMessages or recieveMessages quit, usually a failure or exit
@@ -102,14 +114,47 @@ int main(int argc, char* argv[]) {
     close(server_socket);
     return 0;
 }
+
+
 // Repeatedly listen and send messages to the server on this process.
 // Server knows whether it is a chat message because we are in that stage
 // of the logic loop and it asked to recieve a chat message on that thread.
-void sendMessages(int server_socket)
+void sendMessages(int server_socket, int pipefd[2])
 {
+    int chatting = 0; // Server makes a request to modify this value when we begin a chat with someone
+    char CRC[2] = "0";
+
+    close(pipefd[1]); // We will read only through the pipe to get signals from the server
+    fcntl(pipefd[0], F_SETFL, O_NONBLOCK); // Set the pipe to not block, read once
+    
+
+
+    // Loop to listen to client input and send messages
     while (1) {
         char message[MAX_MSG_LEN];
         memset(message, 0, sizeof(message));
+
+        // Check if we got a signal from the server, first
+        char buf[10];
+        bzero(buf, sizeof(buf));
+        int bytes = read(pipefd[0], buf, sizeof(buf));
+        if (bytes > 0)
+        {  
+            // We got the encode flag. Set the encoding method, and notify that we are chatting 
+            printf("FLAG RECIEVED: %s\n", buf);
+
+            // Recieved a control flag from the server.
+            if (strcmp(buf, "CRC") == 0)
+                CRC[0] = '1';
+
+            else if (strcmp(buf, "HAM") == 0)
+                CRC[0] = '0';
+
+            chatting = 1;
+
+            // Empty the buffer and listen for the next flag
+
+        }
 
         
 
@@ -146,15 +191,18 @@ void sendMessages(int server_socket)
         // If the user is chatting, encode and send it.
         // Otherwise, it's initialization data, just send it.
         // (we dont want to malform their login info)
+        printf("CHATTING? %d\n", chatting);
         if (chatting)
         {
-            char * encoded_message = encodeMessage(message);
-            // Send the encoded message to the server
-            ssize_t bytesSent = send(server_socket, encoded_message, strlen(encoded_message), 0);
-            if (bytesSent == -1) {
-                perror("Error sending message to the server");
-                break;
-            }
+        
+            //char * encoded_message = encodeMessage(message, CRC);
+            
+            // // Send the encoded message to the server
+            // ssize_t bytesSent = send(server_socket, encoded_message, strlen(encoded_message), 0);
+            // if (bytesSent == -1) {
+            //     perror("Error sending message to the server");
+            //     break;
+            // }
 
         }
         else
@@ -167,16 +215,20 @@ void sendMessages(int server_socket)
             }
         }
     }
+
+    
+
+    close(pipefd[0]);
 }
 
 // Encode and return all frames of this message.
-char * encodeMessage(char* message)
+char * encodeMessage(char* message, char* CRC)
 {
     int len = strlen(message);
 
     // There will be MAX_MSG_LEN / FRAME_LEN frames at most. Each has F data chars and
     // 3 control chars, each being 8 bits. Also each has 1 CRC flag, and may have 32 CRC bits
-    char * encoded_message = malloc((MAX_MSG_LEN / FRAME_LEN) * (((FRAME_LEN + 3) * 8) + 1 + 32) + 1);
+    char * encoded_message = malloc((MAX_MSG_LEN / FRAME_LEN) * (((FRAME_LEN + 3) * 8) + 1 + (strcmp(CRC, "1") == 0? 32: 0)) + 1);
     memset(encoded_message, 0, sizeof(encoded_message));
         
     char frame[FRAME_LEN + 1];  // 64 characters + 1 for the null terminator
@@ -200,7 +252,7 @@ char * encodeMessage(char* message)
         frame[j] = '\0';  // Null-terminate the substring
 
         // We have a 64 char frame of text. Process it
-        char* encoded_frame =  prepareFrame(frame, (random_frame == (i / FRAME_LEN)));
+        char* encoded_frame =  prepareFrame(frame, (random_frame == (i / FRAME_LEN)), CRC);
         strcat(encoded_message, encoded_frame);
 
         //printf("%s\n", frame);  // Print the chunk of the message
@@ -211,7 +263,7 @@ char * encodeMessage(char* message)
 
 // Prepare frame: takes <65 characters of the message at a time, 
 // encodes (with CRC), flips a bit, returns encoded & malformed frame with control characters
-char * prepareFrame(char* chunk, int malform)
+char * prepareFrame(char* chunk, int malform, char* CRC)
 {
     // Make files to show debug info for framing and encoding
     FILE * binfFile = fopen("../output/chat/last_msg.binf", "w");
@@ -406,7 +458,7 @@ char * prepareFrame(char* chunk, int malform)
     }
 }
 
-void receiveMessages(int server_socket) {
+void receiveMessages(int server_socket, int pipefd[2]) {
     while (1) {
         
 
@@ -493,16 +545,6 @@ void receiveMessages(int server_socket) {
 
                     }
 
-                    // Server is telling us we began chatting.
-                    // This is used so that we begin encoding our messages
-                    // and sending them frame by frame
-                    else if (strcmp(message, "chatting") == 0) 
-                    {
-                        
-                        chatting = 1;
-
-                    }
-
                     // This was a generic information message.
                     // Display it to the client
                     else
@@ -518,9 +560,11 @@ void receiveMessages(int server_socket) {
                 else if (strcmp(tag, "ENCODE") == 0 )
                 {
                     if (strcmp(message, "CRC") == 0)
-                        CRC[0] = '1';
+                        // Set the chat flag to 1 in the parent process (sendingMessages)
+                        write(pipefd[1], "CRC", 4);
                     else
-                        CRC[0] = '0';
+                        // Set the chat flag to 1 in the parent process (sendingMessages)
+                        write(pipefd[1], "HAM", 4);
                     
                     //fflush(stdout);
                     // Acknowledge we recieved CRC flag so we can now get the user list
