@@ -74,7 +74,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     if ((dir = opendir(folder_path)) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-                char input_file_path[256];
+                char input_file_path[strlen(ent->d_name) + strlen(folder_path) +2];
                 snprintf(input_file_path, sizeof(input_file_path), "%s/%s", folder_path, ent->d_name);
                 FILE* input_file = fopen(input_file_path, "r");
 
@@ -97,7 +97,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                         struct dirent *entry;
 
                         while ((entry = readdir(dir)) != NULL) {
-                                char filePath[256];
+                                char filePath[strlen(dirname) + strlen(entry->d_name) + 2];
                                 snprintf(filePath, sizeof(filePath), "%s/%s", dirname, entry->d_name);
                                 unlink(filePath);
                         }
@@ -229,6 +229,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             
                             // Parent reads result from the child process (the new frame)
                             char frame[68]; // The frame to be recieved will be stored here
+                            bzero(frame, sizeof(frame));
 
                             // Read frame result
                             int frame_len = read(frame_pipe[0], frame, sizeof(frame));
@@ -300,7 +301,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 // Parent reads result from the child process (the encoded frame)
                                 // Add space for control chars and bit conversion
                                 char encoded_frame[(FRAME_LEN + 3) * 8]; // The encoded frame
-                                    
+                                bzero(encoded_frame, sizeof(encoded_frame));
+
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
                                 close(encode_pipe[0]);  // Done reading encode data
@@ -415,7 +417,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                     
                                     // Parent reads result from the child process (the decoded frame)
                                     char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
-                                     
+                                     bzero(decoded_frame, sizeof(decoded_frame));
+
                                     // Listen for & store decoded frame
                                     int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
                                     close(decode_pipe[0]);  // Done reading encode data
