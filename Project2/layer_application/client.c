@@ -23,7 +23,7 @@
 void receiveMessages(int server_socket, int pipefd[2]);
 void sendMessages(int server_socket, int pipefd[2]);
 char * encodeMessage(char* message, char* CRC);
-char * prepareFrame(char* chunk, int malform, char* CRC);
+char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile);
 
 char SERVER_IP[16];
 int SERVER_PORT;
@@ -191,12 +191,28 @@ void sendMessages(int server_socket, int pipefd[2])
         // If the user is chatting, encode and send it.
         // Otherwise, it's initialization data, just send it.
         // (we dont want to malform their login info)
-        if (chatting && 0)
+        if (chatting)
         {
-        
-            //char * encoded_message = encodeMessage(message, CRC);
+            // Encode and malform the message
+            char * encoded_message = encodeMessage(message, CRC);
+
+            // TODO NEXT-
+            // - server must decode the message
+            // format it (sender name), store in history
+            // encode again, (no malformService on server side)
+            // consider adding <MSG> tags here.
+            // forward encoded data to client2.
+
+            // then, client must modify recieveMessages for <MSG> reception of binary data
+            // here is where we will call a function called parseData(encodedMessage)
+            // which will return it to the <MSG> handler to be printed out to the screen.
+
+            // Only one question: how to get sender name?
+            // answer: append it before encoding, so its there when we decode!
+            // then, on server, to format history properly (to get the RAW message back)
+            // just find the first index of ': ' and return the substring after.
             
-            // // Send the encoded message to the server
+            // Send the encoded message to the server
             // ssize_t bytesSent = send(server_socket, encoded_message, strlen(encoded_message), 0);
             // if (bytesSent == -1) {
             //     perror("Error sending message to the server");
@@ -212,6 +228,9 @@ void sendMessages(int server_socket, int pipefd[2])
                 perror("Error sending message to the server");
                 break;
             }
+
+            // implement ACK here: wait for server to respond before checking if it filled the buffer
+            usleep(500);
         }
     }
 
@@ -224,16 +243,20 @@ void sendMessages(int server_socket, int pipefd[2])
 char * encodeMessage(char* message, char* CRC)
 {
     int len = strlen(message);
+    // Make files to show debug info for framing and encoding this message
+    FILE * binfFile = fopen("../output/chat/last_msg.binf", "w");
+    FILE * frmeFile = fopen("../output/chat/last_msg.frme", "w");
 
     // There will be MAX_MSG_LEN / FRAME_LEN frames at most. Each has F data chars and
     // 3 control chars, each being 8 bits. Also each has 1 CRC flag, and may have 32 CRC bits
     char * encoded_message = malloc((MAX_MSG_LEN / FRAME_LEN) * (((FRAME_LEN + 3) * 8) + 1 + (strcmp(CRC, "1") == 0? 32: 0)) + 1);
     memset(encoded_message, 0, sizeof(encoded_message));
+    
         
     char frame[FRAME_LEN + 1];  // 64 characters + 1 for the null terminator
 
     // frames is chars / frame length
-    int frames = ceil(len / FRAME_LEN);
+    int frames = (int)ceil((double)len / (double)FRAME_LEN);
 
     //  Get a random frame
     unsigned int seed = (unsigned int)getpid();
@@ -241,7 +264,9 @@ char * encodeMessage(char* message, char* CRC)
 
     // between 0 and frames - 1
     int random_frame = rand() % frames;
+    
     printf("Malformed frame: %d\n", random_frame + 1);
+    
 
     for (int i = 0; i < len; i += FRAME_LEN) {
         int j;
@@ -251,22 +276,23 @@ char * encodeMessage(char* message, char* CRC)
         frame[j] = '\0';  // Null-terminate the substring
 
         // We have a 64 char frame of text. Process it
-        char* encoded_frame =  prepareFrame(frame, (random_frame == (i / FRAME_LEN)), CRC);
+        char* encoded_frame =  prepareFrame(frame, (random_frame == (i / FRAME_LEN)), CRC, binfFile, frmeFile);
         strcat(encoded_message, encoded_frame);
 
         //printf("%s\n", frame);  // Print the chunk of the message
     }
+
+    fclose(binfFile);
+    fclose(frmeFile);
 
     return encoded_message;
 }
 
 // Prepare frame: takes <65 characters of the message at a time, 
 // encodes (with CRC), flips a bit, returns encoded & malformed frame with control characters
-char * prepareFrame(char* chunk, int malform, char* CRC)
+char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile)
 {
-    // Make files to show debug info for framing and encoding
-    FILE * binfFile = fopen("../output/chat/last_msg.binf", "w");
-    FILE * frmeFile = fopen("../output/chat/last_msg.frme", "w");
+    
 
     // Create a pipe to communicate with frame.c
     int frame_pipe[2];
@@ -384,12 +410,13 @@ char * prepareFrame(char* chunk, int malform, char* CRC)
 
             // Parent reads result from the child process (the encoded frame)
             // Add space for control chars and bit conversion
-            char * encoded_frame = malloc((FRAME_LEN + 3) * 8 + 32); // The encoded frame
-            bzero(encoded_frame, sizeof(encoded_frame));
+            int encoded_size = ((frame_len * 8) + 1 + ((strcmp(CRC, "1") == 0)? 32: 0));
+            char * encoded_frame = malloc(encoded_size); // The encoded frame
+            bzero(encoded_frame, encoded_size);
             // Otherwise, would have old bytes in it
                 
             // Listen for & store encoded frame
-            int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
+            int encoded_len = read(encode_pipe[0], encoded_frame, encoded_size);
             close(encode_pipe[0]);  // Done reading encode data
 
             // Here, we have the encoded_frame!
@@ -450,6 +477,7 @@ char * prepareFrame(char* chunk, int malform, char* CRC)
 
             // May contain a flipped bit now.
             fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
+            
             return encoded_frame;
 
         }
@@ -469,9 +497,6 @@ void receiveMessages(int server_socket, int pipefd[2]) {
 
         // Receive a message from the server
         ssize_t bytesRead = recv(server_socket, buffer2, sizeof(buffer2), 0);
-        // printf("%s\n", buffer2);
-        // fflush(stdout);
-
         
 
         if (bytesRead == -1) {
@@ -567,7 +592,7 @@ void receiveMessages(int server_socket, int pipefd[2]) {
                     
                     //fflush(stdout);
                     // Acknowledge we recieved CRC flag so we can now get the user list
-                    send(server_socket, "|", 1, 0);
+                    //send(server_socket, "|", 1, 0);
                 }
 
                 // Client has sent us a message. Display it

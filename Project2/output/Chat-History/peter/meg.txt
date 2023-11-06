@@ -1,2 +1,31 @@
 -meg: new message
 -YOU: peter responds
+-YOU: hi
+-YOU: damn
+-YOU: hi
+-YOU: dam
+-YOU: hi
+-YOU: hi
+-YOU: hi
+-YOU: hi
+-YOU: bye
+-YOU: hi
+-YOU: weird
+-YOU: help
+-YOU: chat
+-YOU: with
+-YOU: me
+-YOU: gi
+-YOU: fe
+-YOU: 2
+-YOU: hi
+-YOU: hi
+-YOU: hi
+-YOU: wow!
+-YOU: it worked!!!
+-YOU: /clear
+-YOU: |
+-YOU: hi
+-meg: |
+-meg: oh
+-YOU: cool

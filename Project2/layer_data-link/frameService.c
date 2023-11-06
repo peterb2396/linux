@@ -21,7 +21,7 @@ int frameChunk(int frame_pipe[2])
     
     close(frame_pipe[0]);
 
-    char control[4];
+    char control[3];
     control[0] = (char)22;  // First SYN character
     control[1] = (char)22;  // Second SYN character
     control[2] = (char)num_read;  // Length
