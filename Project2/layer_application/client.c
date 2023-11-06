@@ -23,7 +23,7 @@
 void receiveMessages(int server_socket, int pipefd[2]);
 void sendMessages(int server_socket, int pipefd[2]);
 char * encodeMessage(char* message, char* CRC);
-char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile);
+char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile, int malform_padding);
 
 char SERVER_IP[16];
 int SERVER_PORT;
@@ -123,6 +123,7 @@ void sendMessages(int server_socket, int pipefd[2])
 {
     int chatting = 0; // Server makes a request to modify this value when we begin a chat with someone
     char CRC[2] = "0";
+    char name[20];
 
     close(pipefd[1]); // We will read only through the pipe to get signals from the server
     fcntl(pipefd[0], F_SETFL, O_NONBLOCK); // Set the pipe to not block, read once
@@ -131,28 +132,22 @@ void sendMessages(int server_socket, int pipefd[2])
 
     // Loop to listen to client input and send messages
     while (1) {
-        char message[MAX_MSG_LEN];
+        char message[MAX_MSG_LEN + sizeof(name) + 3];
         memset(message, 0, sizeof(message));
 
         // Check if we got a signal from the server, first
-        char buf[10];
+        char buf[30];
         bzero(buf, sizeof(buf));
         int bytes = read(pipefd[0], buf, sizeof(buf));
         if (bytes > 0)
         {  
             // We got the encode flag. Set the encoding method, and notify that we are chatting 
-            printf("FLAG RECIEVED: %s\n", buf);
-
-            // Recieved a control flag from the server.
-            if (strcmp(buf, "CRC") == 0)
-                CRC[0] = '1';
-
-            else if (strcmp(buf, "HAM") == 0)
-                CRC[0] = '0';
+            
+            // Flag gives our name and encode method.
+            sscanf(buf, "%[^_]%*c%[^_]", CRC, name);
+            printf("FLAGS RECIEVED: %s, %s\n", CRC, name);
 
             chatting = 1;
-
-            // Empty the buffer and listen for the next flag
 
         }
 
@@ -193,15 +188,20 @@ void sendMessages(int server_socket, int pipefd[2])
         // (we dont want to malform their login info)
         if (chatting)
         {
+            //Add my name to the message
+            char new_message[sizeof(message) + sizeof(name) + 3];
+            sprintf(new_message, "%s: %s", name, message);
+            
             // Encode and malform the message
-            char * encoded_message = encodeMessage(message, CRC);
+            char * encoded_message = encodeMessage(new_message, CRC);
 
             // TODO NEXT-
-            // - server must decode the message
-            // format it (sender name), store in history
-            // encode again, (no malformService on server side)
-            // consider adding <MSG> tags here.
-            // forward encoded data to client2.
+            // add <MSG> tags here
+            // send to server
+            // value can be sent STRAIGHT THROUGH to c2 without decoding, encoding or formatting!
+            // - server must decode the message, but first, remove <MSG> tags.
+            // store decoded result in both histories
+   
 
             // then, client must modify recieveMessages for <MSG> reception of binary data
             // here is where we will call a function called parseData(encodedMessage)
@@ -242,6 +242,8 @@ void sendMessages(int server_socket, int pipefd[2])
 // Encode and return all frames of this message.
 char * encodeMessage(char* message, char* CRC)
 {
+    
+
     int len = strlen(message);
     // Make files to show debug info for framing and encoding this message
     FILE * binfFile = fopen("../output/chat/last_msg.binf", "w");
@@ -274,9 +276,19 @@ char * encodeMessage(char* message, char* CRC)
             frame[j] = message[i + j];
         }
         frame[j] = '\0';  // Null-terminate the substring
+        int frame_index = (i / FRAME_LEN);
 
+        // Get the malform padding: used to avoid malforming a username
+        int malform_padding = 0;
+        if (frame_index == 0)
+        {
+            // Find the length of the name section of the message
+            const char *result = strstr(message, ": ");
+            int index = (result - message);
+            malform_padding += ((index + 2) * 8); // Number of bits in the name section
+        }
         // We have a 64 char frame of text. Process it
-        char* encoded_frame =  prepareFrame(frame, (random_frame == (i / FRAME_LEN)), CRC, binfFile, frmeFile);
+        char* encoded_frame =  prepareFrame(frame, (random_frame == frame_index), CRC, binfFile, frmeFile, malform_padding);
         strcat(encoded_message, encoded_frame);
 
         //printf("%s\n", frame);  // Print the chunk of the message
@@ -290,7 +302,7 @@ char * encodeMessage(char* message, char* CRC)
 
 // Prepare frame: takes <65 characters of the message at a time, 
 // encodes (with CRC), flips a bit, returns encoded & malformed frame with control characters
-char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile)
+char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE * frmeFile, int malformPadding)
 {
     
 
@@ -449,9 +461,16 @@ char * prepareFrame(char* chunk, int malform, char* CRC, FILE * binfFile, FILE *
                     // Convert integers to strings
                     snprintf(malform_read, sizeof(malform_read), "%d", malform_pipe[0]);
                     snprintf(malform_write, sizeof(malform_write), "%d", malform_pipe[1]);
+
+                    // Convert malform padding bits to a string to pass it as argv
+                    
+                    int numDigits = (malformPadding)? (int)log10(malformPadding) + 1: 1;
+                    char malform_padding[numDigits + 1];
+                    sprintf(malform_padding, "%d", malformPadding);
+
                     
                     // Child process: Call service then die
-                    execl("../layer_physical/malformService", "malformService", malform_read, malform_write, NULL);
+                    execl("../layer_physical/malformService", "malformService", malform_read, malform_write, malform_padding, NULL);
                     perror("execl");  // If execl fails
                     exit(EXIT_FAILURE);
                 }
@@ -583,16 +602,7 @@ void receiveMessages(int server_socket, int pipefd[2]) {
                 // Server is telling us to use CRC encoding
                 else if (strcmp(tag, "ENCODE") == 0 )
                 {
-                    if (strcmp(message, "CRC") == 0)
-                        // Set the chat flag to 1 in the parent process (sendingMessages)
-                        write(pipefd[1], "CRC", 4);
-                    else
-                        // Set the chat flag to 1 in the parent process (sendingMessages)
-                        write(pipefd[1], "HAM", 4);
-                    
-                    //fflush(stdout);
-                    // Acknowledge we recieved CRC flag so we can now get the user list
-                    //send(server_socket, "|", 1, 0);
+                    write(pipefd[1], message, strlen(message));
                 }
 
                 // Client has sent us a message. Display it

@@ -11,9 +11,11 @@
 // Malforms a provided data frame by choosing
 // a random bit within it and flipping it.
 
-int malformFrame(int malform_pipe[2])
+int malformFrame(int malform_pipe[2], int malform_padding)
 {
     char buffer[67 * 8 + 1 + 32]; // SPace for encoded frame
+    // Do not allow malform to affect these first n bits:
+    int padding = L_BOUND + malform_padding;
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
@@ -28,7 +30,7 @@ int malformFrame(int malform_pipe[2])
     srand(seed);
 
     // Generate a random bit in the range [24, len-1]
-    int random_bit = (rand() % (strlen(buffer) - 32 - L_BOUND)) + L_BOUND;
+    int random_bit = (rand() % (strlen(buffer) - 32 - padding)) + padding;
 
     // Make sure the bit is not a parity bit
     if (random_bit % 8 == 0)
@@ -70,6 +72,7 @@ int main(int argc, char* argv[]) {
 
     malform_pipe[0] = atoi(argv[1]); // Assign the first integer
     malform_pipe[1] = atoi(argv[2]); // Assign the second integer
+    int malform_padding = atoi(argv[3]); // Assign the padding bits
 
-    return malformFrame(malform_pipe);
+    return malformFrame(malform_pipe, malform_padding);
 }

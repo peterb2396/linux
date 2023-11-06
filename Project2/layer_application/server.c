@@ -234,10 +234,10 @@ void* handle_client(void* arg) {
     // User has selected a chat destination!
     // Send encode method to start encoding messages
     // Use CRC for every other user
-    if (num_users % 2)
-        send(client_socket, "<ENCODE>CRC</ENCODE>", 20, 0);
-    else
-        send(client_socket, "<ENCODE>HAM</ENCODE>", 20, 0);
+    char msg[25 + MAX_NAME_LENGTH];
+    sprintf(msg, "<ENCODE>%s_%s</ENCODE>", ((num_users % 2)? "0": "1"), username);
+    send(client_socket, msg, strlen(msg), 0);
+    
 
     // Get the latest client details, including their selected recipient
     client = findClientBySocket(client_socket);
@@ -866,14 +866,6 @@ void clientConnected(int client_socket, char* username)
 
     // add client to active user list
     active_users[num_users++] = newClient;
-
-    // Use CRC for every other user
-    // if (num_users % 2)
-    //     send(client_socket, "<ENCODE>CRC</ENCODE>", 20, 0);
-    // else
-    //     send(client_socket, "<ENCODE>HAM</ENCODE>", 20, 0);
-
-        
 
     // make sure this client has a folder for their history in the database
     // Create a folder for this user's chat with the target user
