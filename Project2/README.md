@@ -8,6 +8,10 @@
 6. Chat history restored each session
 7. If a user is offline, messages will forward on their next login
 8. Automatic user list refresh when a new user registers
+9. Framing, encoding, malforming, decoding, deframing of data.
+10. Error detection by CRC and hamming.
+11. File simulator that runs automatically to show error insertion / detection / framing
+12. Sophisticated folder structure for input, output and debug files to be viewed
 
 
 ## How to run this program
