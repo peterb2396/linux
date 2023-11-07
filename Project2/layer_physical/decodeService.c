@@ -82,6 +82,7 @@ int decodeFrame(int decode_pipe[2])
     // Now, also add space for 32 CRC bits and 1 crc flag 
     char buffer[(FRAME_LEN + 3) * 8 + strlen(generator) + 1 + 50];
     bzero(buffer, sizeof(buffer));
+    
 
     // Read the chunk from the consumer through the decode pipe
     __ssize_t num_read = read(decode_pipe[0], buffer, sizeof(buffer));
@@ -121,6 +122,7 @@ int decodeFrame(int decode_pipe[2])
         strcat(res, str);
     }
     write(decode_pipe[1], res, strlen(res));
+    
 
     close(decode_pipe[1]); 
     return EXIT_SUCCESS;

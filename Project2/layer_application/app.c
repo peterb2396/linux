@@ -163,7 +163,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // between 0 and frames - 1
                     int random_frame = rand() % frames;
-                    printf("Malformed frame: %d\n", random_frame + 1);
+                    printf("File Debug (%s): CRC DETECTED AN ERROR IN FRAME %d/%d\n",inpf, random_frame + 1,frames);
 
 
                     int frame_index = 0;
@@ -223,6 +223,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                             // Read frame result
                             int frame_len = read(frame_pipe[0], frame, sizeof(frame));
+                            
                             close(frame_pipe[0]);  // Close the read end of the frame pipe
 
 
@@ -288,15 +289,14 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 
                                 
 
-                                // Parent reads result from the child process (the encoded frame)
-                                // Add space for control chars and bit conversion
-                                // add 1 space for crc flag, add 32 for crc bits if CRC
-                                char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + (strcmp(CRC_FLAG, "1") == 0)? 32: 0]; // The encoded frame
+                                // Problem child buffer
+                                char encoded_frame[600]; // The encoded frame
                                 bzero(encoded_frame, sizeof(encoded_frame));
                                 // Otherwise, would have old bytes in it
                                     
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
+                                
                                 close(encode_pipe[0]);  // Done reading encode data
 
                                 // Here, we have the encoded_frame!
@@ -329,9 +329,10 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                         // Convert integers to strings
                                         snprintf(malform_read, sizeof(malform_read), "%d", malform_pipe[0]);
                                         snprintf(malform_write, sizeof(malform_write), "%d", malform_pipe[1]);
-                                        
+
+                        
                                         // Child process: Call service then die
-                                        execl("../layer_physical/malformService", "malformService", malform_read, malform_write, NULL);
+                                        execl("../layer_physical/malformService", "malformService", malform_read, malform_write, "0", CRC_FLAG, (frame_index == frames - 1)? "1": "0", NULL);
                                         perror("execl");  // If execl fails
                                         exit(EXIT_FAILURE);
                                     }
@@ -358,6 +359,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 // May contain a flipped bit now.
                                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
                                 write(ptoc_pipe[1], encoded_frame, encoded_len);
+                                
 
                             }
 
@@ -389,11 +391,12 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     FILE* outfFile;
 
     // Now add 32 bits for CRC
-    char message[(67 * 8) + 1+ (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
+    char message[(67 * 8) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
     char *inpf;           // name of input file currently being processed
 
     while (1) {
         ssize_t bytes_read = read(ptoc_pipe[0], message, sizeof(message));
+        
 
 
         if (bytes_read <= 0) {
@@ -436,6 +439,10 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 perror("pipe");
                 exit(EXIT_FAILURE);
             }
+
+            
+
+            
             
             // Attempt to fork so child can exec the subroutine
             fflush(stdout);
@@ -456,7 +463,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
                 
                 // Child process: Call encode then die
-                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, NULL);
+                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "0",NULL);
                 perror("execl");  // If execl fails
                 exit(EXIT_FAILURE);
             }
@@ -464,8 +471,9 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
             {
                 // Write data to be decoded through decode pipe
                 write(decode_pipe[1], message, bytes_read);
+                
                 close(decode_pipe[1]);  // Done writing frame to be decoded
-
+                
                 // When child is done, read result
                 waitpid(decode_pid, NULL, 0);;
 
@@ -482,6 +490,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 // Here, we have the decoded frame!
 
                 // Now, it's time to deframe it back to a chunk.
+                
 
                 // Create a pipe to communicate with deframe.c
                 int deframe_pipe[2];
@@ -515,23 +524,28 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                     write(deframe_pipe[1], decoded_frame, decoded_len);
                     
                     close(deframe_pipe[1]);
+                    
 
                     // When child is done, read chunk (ctrl chars removed)
-                    waitpid(deframe_pid, NULL, 0);;
+                    
+                    waitpid(deframe_pid, NULL, 0);
+                    
                     char chunk[FRAME_LEN]; // The frame to be recieved will be stored here
                     bzero(chunk, sizeof(chunk));
+                    
 
                     int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
                     close(deframe_pipe[0]); 
                     
 
                     fwrite(chunk, sizeof(char), chunk_len, outfFile);
-
+                    
 
             }
-
+            
             
         }
+        
         
 
         

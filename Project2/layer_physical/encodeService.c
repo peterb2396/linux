@@ -99,7 +99,7 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     {
         // Send the data with CRC bits, T = D+R
         char * crc_res = CRC(data);
-        write(encode_pipe[1], crc_res, strlen(crc_res));
+        int res = write(encode_pipe[1], crc_res, strlen(crc_res));
         //printf("\nEncoded: %s\n", crc_res);
         //free(crc_res);
         
