@@ -70,6 +70,9 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     FILE *binfFile;
     FILE *frmeFile;
 
+    // Make directory if not existing
+    mkdir("../output/Inpf-Results", 0700);
+
     // For each file in the input directory...
     if ((dir = opendir(folder_path)) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
@@ -89,7 +92,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // Make a directory for these output files
                     char dirname[256]; 
-                    snprintf(dirname, sizeof(dirname), "../output/%s", inpf);
+                    snprintf(dirname, sizeof(dirname), "../output/Inpf-Results/%s", inpf);
                     if (mkdir(dirname, 0700))
                     {
                         // File already existed: Empty it
@@ -112,7 +115,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // prepare file.binf
                     char binf_file_name[50]; 
-                    snprintf(binf_file_name, sizeof(binf_file_name), "../output/%s/%s.binf", inpf, inpf);
+                    snprintf(binf_file_name, sizeof(binf_file_name), "../output/Inpf-Results/%s/%s.binf", inpf, inpf);
                     binfFile = fopen(binf_file_name, "w");
 
                     if (binfFile == NULL) {
@@ -123,7 +126,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // prepare file.frme
                     char frme_file_name[50]; 
-                    snprintf(frme_file_name, sizeof(frme_file_name), "../output/%s/%s.frme", inpf, inpf);
+                    snprintf(frme_file_name, sizeof(frme_file_name), "../output/Inpf-Results/%s/%s.frme", inpf, inpf);
                     frmeFile = fopen(frme_file_name, "w");
 
                     if (frmeFile == NULL) {
@@ -414,7 +417,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
 
             // prepare the outf file in the "output" folder
             char outf_file_name[256]; 
-            snprintf(outf_file_name, sizeof(outf_file_name), "../output/%s/%s.outf", inpf, inpf);
+            snprintf(outf_file_name, sizeof(outf_file_name), "../output/Inpf-Results/%s/%s.outf", inpf, inpf);
             outfFile = fopen(outf_file_name, "w");
 
 

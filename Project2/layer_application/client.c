@@ -142,10 +142,8 @@ void sendMessages(int server_socket, int pipefd[2])
             if (bytes > 0)
             {  
                 // We got the encode flag. Set the encoding method, and notify that we are chatting 
-                
-                // Flag gives our name and encode method.
                 sscanf(buf, "%[^_]%*c%[^_]", CRC, name);
-                printf("FLAGS RECIEVED: %s, %s\n", CRC, name);
+                //printf("FLAGS RECIEVED: %s, %s\n", CRC, name);
 
                 chatting = 1;
 
@@ -215,8 +213,8 @@ void sendMessages(int server_socket, int pipefd[2])
             // Read the input in chunks of FRAME_LEN, pipe & fork to frame.
             while ((num_read = fread(frame_buffer, 1, FRAME_LEN, temp)) > 0) {
 
-                FILE * binfFile = fopen("../output/chat/last_msg.binf", "w");
-                FILE * frmeFile = fopen("../output/chat/last_msg.frme", "w");
+                FILE * binfFile = fopen("../output/chat-debug/last_msg.binf", "w");
+                FILE * frmeFile = fopen("../output/chat-debug/last_msg.frme", "w");
                 
 
 

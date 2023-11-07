@@ -36,6 +36,8 @@ int num_users = 0;
 
 // Directories to store chat history and users within
 const char* HISTORY_DIR = "../output/Chat-History";
+const char* RESULTS_DIR = "../output/Inpf-Results";
+const char* DEBUG_DIR = "../output/chat-debug";
 const char* USERS_FILE = "users.txt";
 
 void* handle_client(void* arg);
@@ -75,6 +77,23 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // Run the test files first
+    printf("Processing files from input folder...\n");
+    pid_t files_pid = fork();
+    if (files_pid == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+    // Run the files program
+    if (files_pid == 0)
+    {
+        // Child process: Call then die
+        execl("files", "files", NULL);
+        perror("execl");  // If execl fails
+        exit(EXIT_FAILURE);
+    }
+    // Parent contiunues to start server
+
     int server_socket, client_socket, port;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
@@ -112,7 +131,11 @@ int main(int argc, char* argv[]) {
     fflush(stdout);
 
     // Create the parent chat directory if it doesn't exist
+    // Create the chat debug directory
+    // Create the test files dir
     mkdir(HISTORY_DIR, 0777);
+    mkdir(DEBUG_DIR, 0777);
+    mkdir(RESULTS_DIR, 0777);
     
 
     while (1) {
@@ -284,6 +307,7 @@ void* handle_client(void* arg) {
     char their_history_path[strlen(HISTORY_DIR) + strlen(client.recip_name) + strlen(client.name) + 7]; //add three for 2 slashes and \0, add 4 for .txt
     snprintf(their_history_path, sizeof(their_history_path), "%s/%s/%s.txt", HISTORY_DIR, client.recip_name, client.name);
     FILE * their_history_file;
+    FILE * chat_debug_file;
 
     
 
@@ -448,6 +472,7 @@ void* handle_client(void* arg) {
         // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
         my_history_file = fopen(my_history_path, "a+");
         their_history_file = fopen(their_history_path, "a+"); 
+        chat_debug_file = fopen("../output/chat-debug/last_msg.done", "w");
 
         // Handle errors for my history file (if manually deleted)
         if (my_history_file == NULL)
@@ -470,7 +495,7 @@ void* handle_client(void* arg) {
 
             their_history_file = fopen(their_history_path, "a+"); 
         }
-        
+
         // Remove STX ASCII-2 Char that signified start of string
         if (parsed_frame[strlen(parsed_frame) - 1] == 2)
             parsed_frame[strlen(parsed_frame) - 1] = '\0'; 
@@ -481,10 +506,14 @@ void* handle_client(void* arg) {
         fprintf(my_history_file, "%s", parsed_frame);
         fprintf(their_history_file, "%s", parsed_frame);
 
+        // Stpre the message in the chat-debug
+        fprintf(chat_debug_file, "%s", parsed_frame);
+
 
         // Close the history files (to save them)
         fclose(my_history_file);
         fclose(their_history_file);
+        fclose(chat_debug_file);
 
         
         
