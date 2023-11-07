@@ -198,7 +198,7 @@ void* handle_client(void* arg) {
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
 
-        if (strcmp(buffer, "/exit") == 0) 
+        if (strcmp(buffer, "/exit\n") == 0) 
         {
             clientDisconnected(client_socket);
             return NULL;
@@ -318,6 +318,7 @@ void* handle_client(void* arg) {
         // Listen for client's frame message, will be 64 chars
         memset(buffer, 0, sizeof(buffer));
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer), 0);
+
         
         if (bytesRead < 0)
         {
@@ -330,14 +331,15 @@ void* handle_client(void* arg) {
         } 
 
         // Client wants to exit the chat
-        else if (strcmp(buffer, "/exit") == 0) 
+        else if (strcmp(buffer, "/exit\n") == 0) 
         {
+            
             clientDisconnected(client_socket);
             return NULL;
         }
 
         // Client wants to delete their account for good
-        else if (strcmp(buffer, "/logout") == 0) 
+        else if (strcmp(buffer, "/logout\n") == 0) 
         {
             // Delete server files for  the user
             deleteUser(client.name);
@@ -846,11 +848,17 @@ int sendUserNamesToClient(int client_socket) {
         }
 
 
-        else if (strcmp(buffer, "/exit") == 0) 
+        else if (strcmp(buffer, "/exit\n") == 0) 
         {
             clientDisconnected(client_socket);
             return 0;
         }
+        else if (strcmp(buffer, "/logout\n") == 0) 
+        {
+            deleteUser(client.name);
+            return 0;
+        }
+
         // They can not make a selection, no users exist
         else if (numUsers == 0)
         {

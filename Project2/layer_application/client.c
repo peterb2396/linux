@@ -190,12 +190,12 @@ void sendMessages(int server_socket, int pipefd[2])
             
 
             // write the message to a temp file
-            FILE* temp = fopen("temp.txt", "w");
+            FILE* temp = fopen("temp-chat.txt", "w");
             fprintf(temp, "%s", new_message);
             fclose(temp);
 
             
-            temp = fopen("temp.txt", "r"); // to read the chat message frame by frame
+            temp = fopen("temp-chat.txt", "r"); // to read the chat message frame by frame
 
             int frames = (int)ceil((double)strlen(new_message) / (double)FRAME_LEN);
             //  Get a random frame
@@ -432,6 +432,7 @@ void sendMessages(int server_socket, int pipefd[2])
 
             }
             fclose(temp);
+            remove("temp-chat.txt");
 
 
         }
