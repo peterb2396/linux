@@ -293,7 +293,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 
 
                                 // Problem child buffer
-                                char encoded_frame[600]; // The encoded frame
+                                char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + 1 + ((strcmp(CRC_FLAG, "1") == 0)? 32: 0)]; // The encoded frame
                                 bzero(encoded_frame, sizeof(encoded_frame));
                                 // Otherwise, would have old bytes in it
                                     

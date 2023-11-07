@@ -17,7 +17,7 @@
 #define DEFAULT_SERVER_IP "127.0.0.1"
 #define DEFAULT_SERVER_PORT 12345
 #define FRAME_LEN 64
-#define MAX_MSG_LEN 5000
+#define MAX_MSG_LEN 10000
 
 
 void receiveMessages(int server_socket, int pipefd[2]);
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     else 
     {
         // More than two arguments provided
-        printf("Too many command line arguments provided.\n");
+        printf("Too many command line arguments provided.\nSee readme.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -345,7 +345,7 @@ void sendMessages(int server_socket, int pipefd[2])
                         // Parent reads result from the child process (the encoded frame)
                         // Add space for control chars and bit conversion
                         // add 1 space for crc flag, add 32 for crc bits if CRC
-                        char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + ((strcmp(CRC, "1") == 0)? 32: 0)]; // The encoded frame
+                        char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + 1 + ((strcmp(CRC, "1") == 0)? 32: 0)]; // The encoded frame
                         bzero(encoded_frame, sizeof(encoded_frame));
                         // Otherwise, would have old bytes in it
                             
