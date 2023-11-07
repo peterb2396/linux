@@ -7,6 +7,7 @@
 
 #define FRAME_LEN 64
 char * generator = "100000100110000001001110110110111";
+int debug = 0;
 
 
 // Helper power function
@@ -57,7 +58,8 @@ int checkCRC(char * data) {
     {
         if (remainder[j] != '0') {
             // If any non-zero remainder is found, an error is detected
-            printf("CRC DETECTED ERROR! Remainder: %s\n", remainder);
+            if(debug)
+                printf("CRC DETECTED ERROR IN THIS FRAME: \n");
             free(remainder);
             free(currentDividendChunk);
             
@@ -96,7 +98,7 @@ int decodeFrame(int decode_pipe[2])
     // Check bits for error before converting
     if(crc_flag)
     {
-        //checkCRC(buffer);
+        checkCRC(buffer);
     }
     else{
         //hamming TBD
@@ -117,13 +119,9 @@ int decodeFrame(int decode_pipe[2])
         char str[2];
         sprintf(str, "%c", ch);
         strcat(res, str);
-        // Send the char through the pipe
-        //write(decode_pipe[1], &ch, 1);
     }
     write(decode_pipe[1], res, strlen(res));
 
-    // Finished encoding, close pipe & return
-    //write(decode_pipe[1], "\0", 2);
     close(decode_pipe[1]); 
     return EXIT_SUCCESS;
 
@@ -142,6 +140,7 @@ int main(int argc, char* argv[]) {
     int decode_pipe[2];
     decode_pipe[0] = atoi(argv[1]); // Assign the first integer
     decode_pipe[1] = atoi(argv[2]); // Assign the second integer
+    debug = atoi(argv[3]);
     
     return decodeFrame(decode_pipe);
 }

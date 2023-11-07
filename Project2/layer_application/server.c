@@ -370,13 +370,13 @@ void* handle_client(void* arg) {
             snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
             
             // Child process: Call encode then die
-            execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, NULL);
+            execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "0", NULL);
             perror("execl");  // If execl fails
             exit(EXIT_FAILURE);
         }
         else // Parent
         {
-            printf("\nTO DECODER: %s\n", buffer);
+            //printf("\nTO DECODER: %s\n", buffer);
             // Write data to be decoded through decode pipe
             write(decode_pipe[1], buffer, strlen(buffer));
             close(decode_pipe[1]);  // Done writing frame to be decoded

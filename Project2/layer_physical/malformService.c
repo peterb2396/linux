@@ -25,8 +25,6 @@ int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int las
     //printf("pad: %d\n", padding);
     //printf("MSG len: %d\n", message_len/8);
 
-    //printf("PADDING: %d\n%ld: MALFORMING: %s\nN: %d\nLAST: %d\n", padding, strlen(buffer), buffer, message_len, (last? 8: 0));
- 
     close(malform_pipe[0]); 
 
     // Choose a bit to flip
@@ -54,9 +52,6 @@ int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int las
     } else if (buffer[random_bit] == '1') {
         buffer[random_bit] = '0';
     }
-
-    printf("Flipped bit: %d\n", random_bit);
-    fflush(stdout);
 
     // Write the new buffer back
     write(malform_pipe[1], buffer, strlen(buffer));

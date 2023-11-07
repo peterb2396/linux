@@ -205,7 +205,7 @@ void sendMessages(int server_socket, int pipefd[2])
             // between 0 and frames - 1
             int random_frame = rand() % frames;
     
-            printf("Malformed frame: %d\n", random_frame + 1);
+            //printf("Malformed frame: %d\n", random_frame + 1);
 
             int frame_index = 0;
             int num_read;
@@ -598,7 +598,7 @@ void receiveMessages(int server_socket, int pipefd[2]) {
                         snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
                         
                         // Child process: Call encode then die
-                        execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, NULL);
+                        execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "1", NULL);
                         perror("execl");  // If execl fails
                         exit(EXIT_FAILURE);
                     }
