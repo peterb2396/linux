@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <dirent.h>
@@ -49,7 +50,7 @@ void modifyClient(Client newClient);
 int verifyUsername(const char *str);
 void deleteUser(const char* username);
 void deleteUserFiles(const char* username);
-void removeUserFromList(const char* username);
+void removeUserFromList(const char* username);      
 
 int PORT;
 
@@ -145,7 +146,7 @@ void* handle_client(void* arg) {
     int client_socket = *((int*)arg);
     char username[MAX_NAME_LENGTH];
     char password[MAX_PASS_LENGTH];
-    char buffer[1024];
+    char buffer[(64 + 3)*8 + 1 + 32 + 1];
 
     Client client;
 
@@ -267,6 +268,7 @@ void* handle_client(void* arg) {
 
         // Send the chat history, along with you are now chatting msg
         char message[(client.recip_socket == -1? 7: 6) + strlen(history) + 30]; // OFFLINE/ONLINE size, history size, your now chatting size
+        bzero(message, sizeof(message));
         snprintf(message, sizeof(message), "%s* Now chatting with %s (%s)", history, client.recip_name, (client.recip_socket == -1? "OFFLINE": "ONLINE") );
         send(client.socket, message, sizeof(message), 0);
 
@@ -289,7 +291,7 @@ void* handle_client(void* arg) {
     // Handle chat functionality
     while (1) {
 
-        // Listen for client's message
+        // Listen for client's frame message, will be 64 chars
         memset(buffer, 0, sizeof(buffer));
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer), 0);
         
@@ -324,18 +326,125 @@ void* handle_client(void* arg) {
 
         // Grab the latest client socket
         client = findClientBySocket(client_socket);
+
+        // Add <MSG> tags to the encoded message
+        char tagged_frame[strlen(buffer) + strlen("<MSG></MSG>")];
+        bzero(tagged_frame, sizeof(tagged_frame));
+        sprintf(tagged_frame, "<MSG>%s</MSG>", buffer);
+        //tagged_frame[strlen(tagged_frame)] = '\0';
         
         
-        // Prepare the message in format Name: message
-        int msg_len = strlen(buffer) + strlen(client.name) + 4;
-        char* message = (char*)malloc(msg_len); // Add 4 for :, ,\0,-
-        snprintf(message, msg_len, "-%s: %s", client.name, buffer);
+        // Send the frame straight through to the recipient
+        // it is in the format <MSG>00101000101110100010...</MSG>
+        // Send to recipient if they are online
+        if (client.recip_socket >= 0)
+            send(client.recip_socket, tagged_frame, strlen(tagged_frame), 0);
+
+        // Will decode and deframe
+        char parsed_frame[65];
+
+        // Pipe before forking to share a pipe for 
+        // transmission of data
+        int decode_pipe[2];
+        if (pipe(decode_pipe) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+        
+        // Attempt to fork so child can exec the subroutine
+        fflush(stdout);
+        pid_t decode_pid = fork();
+        if (decode_pid == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        // Decode this single frame
+        if (decode_pid == 0)
+        {
+            // Make string versions of the pipe id's to pass to argv
+            char decode_read[10]; // Buffer for converting arg1 to a string
+            char decode_write[10]; // Buffer for converting arg2 to a string
+
+            // Convert integers to strings
+            snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
+            snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
+            
+            // Child process: Call encode then die
+            execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, NULL);
+            perror("execl");  // If execl fails
+            exit(EXIT_FAILURE);
+        }
+        else // Parent
+        {
+            printf("\nTO DECODER: %s\n", buffer);
+            // Write data to be decoded through decode pipe
+            write(decode_pipe[1], buffer, strlen(buffer));
+            close(decode_pipe[1]);  // Done writing frame to be decoded
+
+            // When child is done, read result
+            waitpid(decode_pid, NULL, 0);;
+
+            // Parent reads result from the child process (the decoded frame)
+            char decoded_frame[64 + 3 + 1]; // The decoded frame is 1/8 the size
+            bzero(decoded_frame, sizeof(decoded_frame));
+                // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
+                // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data
+
+            // Listen for & store decoded frame
+            int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
+            close(decode_pipe[0]);  // Done reading encode data
+
+            // Here, we have the decoded frame!
+
+            // Now, it's time to deframe it back to a chunk.
+
+            // Create a pipe to communicate with deframe.c
+            int deframe_pipe[2];
+            if (pipe(deframe_pipe) == -1) {
+                perror("pipe");
+                exit(EXIT_FAILURE);
+            }
+            fflush(stdout);
+            pid_t deframe_pid = fork();
+
+            if (deframe_pid == -1) {
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }
+
+            if (deframe_pid == 0) {
+                char deframe_read[10]; // Buffer for converting arg1 to a string
+                char deframe_write[10]; // Buffer for converting arg2 to a string
+
+                // Convert integers to strings
+                snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
+                snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
+                
+                // Child process (deframe.c)
+                execl("../layer_data-link/deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
+                perror("execl");  // If execl fails
+                exit(EXIT_FAILURE);
+            } else {
+                // Parent process
+                // Write data to be framed to deframe.c through the deframe pipe
+                write(deframe_pipe[1], decoded_frame, decoded_len);
+                
+                close(deframe_pipe[1]);
+
+                // When child is done, read chunk (ctrl chars removed)
+                waitpid(deframe_pid, NULL, 0);
+                bzero(parsed_frame, sizeof(parsed_frame));
+
+                int chunk_len = read(deframe_pipe[0], parsed_frame, sizeof(parsed_frame));
+                close(deframe_pipe[0]); 
+                
+        }
 
         
+    }
 
-        // Chat History: 
 
-        // Open the files
+        // Store decoded msg in chat histories: 
         // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
         my_history_file = fopen(my_history_path, "a+");
         their_history_file = fopen(their_history_path, "a+"); 
@@ -363,25 +472,16 @@ void* handle_client(void* arg) {
         }
 
         
-
-        // Add the message to MY history (with no name.. maybe add you: ?)
-        fprintf(my_history_file, "-YOU: %s\n", buffer);
-        // Add the message to the client's history (with my name)
-        fprintf(their_history_file, "%s\n", message);
+        // Store 'name: message' in history
+        fprintf(my_history_file, "%s", parsed_frame);
+        fprintf(their_history_file, "%s", parsed_frame);
 
 
         // Close the history files (to save them)
         fclose(my_history_file);
         fclose(their_history_file);
 
-        // Send to recipient if they are online
-        ssize_t bread;
-        if (client.recip_socket >= 0)
-            bread = send(client.recip_socket, message, msg_len, 0);
-      
-
-        // Free memory for message string
-        free(message);
+        
         
     }
 

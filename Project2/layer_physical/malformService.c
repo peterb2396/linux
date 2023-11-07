@@ -11,14 +11,21 @@
 // Malforms a provided data frame by choosing
 // a random bit within it and flipping it.
 
-int malformFrame(int malform_pipe[2], int malform_padding)
+int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int last)
 {
-    char buffer[67 * 8 + 1 + 32]; // SPace for encoded frame
+    char buffer[600]; // SPace for encoded frame
+    bzero(buffer, sizeof(buffer));
     // Do not allow malform to affect these first n bits:
     int padding = L_BOUND + malform_padding;
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
+    
+    int message_len = (strlen(buffer) - (crc_flag? 32: 0) - (last? 8: 0)- padding);
+    //printf("pad: %d\n", padding);
+    //printf("MSG len: %d\n", message_len/8);
+
+    //printf("PADDING: %d\n%ld: MALFORMING: %s\nN: %d\nLAST: %d\n", padding, strlen(buffer), buffer, message_len, (last? 8: 0));
  
     close(malform_pipe[0]); 
 
@@ -30,14 +37,16 @@ int malformFrame(int malform_pipe[2], int malform_padding)
     srand(seed);
 
     // Generate a random bit in the range [24, len-1]
-    int random_bit = (rand() % (strlen(buffer) - 32 - padding)) + padding;
+    // 8 bits. choose 0 to 7
+    int random_bit = (rand() % message_len) + (padding + 1);
 
     // Make sure the bit is not a parity bit
-    if (random_bit % 8 == 0)
+    if ((random_bit - (padding + 1)) % 8 == 0)
     {
         // If it was a parity bit, chose a random bit in this byte.
         random_bit+= (rand() % 7) + 1;
     }
+    random_bit -=1; // because of 0 indexing
 
     //Flip the bit
     if (buffer[random_bit] == '0') {
@@ -73,6 +82,9 @@ int main(int argc, char* argv[]) {
     malform_pipe[0] = atoi(argv[1]); // Assign the first integer
     malform_pipe[1] = atoi(argv[2]); // Assign the second integer
     int malform_padding = atoi(argv[3]); // Assign the padding bits
+    int crc_flag = atoi(argv[4]); // Assign the padding bits
+    int last = (strcmp(argv[5], "1") == 0? 1:0);
+    
 
-    return malformFrame(malform_pipe, malform_padding);
+    return malformFrame(malform_pipe, malform_padding, crc_flag, last);
 }

@@ -16,8 +16,9 @@ int deframeFrame(int deframe_pipe[2])
     // Note this will not include any crc flag or bits because they are removed by
     // the decode service.
     char buffer[FRAME_LEN + 4];
+    bzero(buffer, sizeof(buffer));
     char* chunk = &buffer[3]; // Will point to actual content ignoring control chars
-
+    
     // Read the framed chunk from the producer through the deframe pipe
     // ex of incoming stream: (SYN)(SYN)(CR)Hello, World!
     __ssize_t num_read = read(deframe_pipe[0], buffer, sizeof(buffer));

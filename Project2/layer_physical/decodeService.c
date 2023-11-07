@@ -50,6 +50,7 @@ int checkCRC(char * data) {
         memmove(currentDividendChunk, currentDividendChunk + 1, strlen(generator) - 1);
         currentDividendChunk[strlen(generator) - 1] = data[e + 1];
     }
+    remainder[strlen(remainder) - 1] = '\0';
 
     // Check if the remainder is all zeros
     for (int j = 0; j < count; j++)
@@ -77,26 +78,33 @@ int decodeFrame(int decode_pipe[2])
 {
     // Add space for the data and 3 control bytes * 8 bits for each
     // Now, also add space for 32 CRC bits and 1 crc flag 
-    char buffer[(FRAME_LEN + 3) * 8 + strlen(generator)];
+    char buffer[(FRAME_LEN + 3) * 8 + strlen(generator) + 1 + 50];
+    bzero(buffer, sizeof(buffer));
 
     // Read the chunk from the consumer through the decode pipe
     __ssize_t num_read = read(decode_pipe[0], buffer, sizeof(buffer));
+    buffer[sizeof(buffer)] = '\0';
+    //printf("\nDecoding: %s\n", buffer);
     
     close(decode_pipe[0]);
 
+    char res[68];
+    bzero(res, 68);
+    
     int crc_flag = (int)buffer[0] - 48;
 
     // Check bits for error before converting
     if(crc_flag)
     {
-        checkCRC(buffer);
+        //checkCRC(buffer);
     }
     else{
         //hamming TBD
     }
 
     // For each byte... but NOT the 32/8 CRC bytes
-    for (int i = 0; i < (num_read - (crc_flag? 32: 0)); i+=8) {
+    // AND NOT THE FIRST CRC BYTE!
+    for (int i = 1; i < (strlen(buffer) - (crc_flag? 32: 0)); i+=8) {
         int num = 0; //the ascii value of this byte
         //printf("\n");
         // For each bit in the byte
@@ -106,12 +114,16 @@ int decodeFrame(int decode_pipe[2])
             
         // The ASCII letter
         char ch = (char)num;
-        
+        char str[2];
+        sprintf(str, "%c", ch);
+        strcat(res, str);
         // Send the char through the pipe
-        write(decode_pipe[1], &ch, 1);
+        //write(decode_pipe[1], &ch, 1);
     }
+    write(decode_pipe[1], res, strlen(res));
 
     // Finished encoding, close pipe & return
+    //write(decode_pipe[1], "\0", 2);
     close(decode_pipe[1]); 
     return EXIT_SUCCESS;
 

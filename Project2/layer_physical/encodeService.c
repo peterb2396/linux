@@ -41,13 +41,14 @@ char * CRC(char * data_in) {
         }
 
         // Set next dividend (drop number down)
-        memmove(currentDividendChunk, currentDividendChunk + 1, strlen(generator) - 1);
-        currentDividendChunk[strlen(generator) - 1] = data[e + 1];
+        memmove(currentDividendChunk, currentDividendChunk + 1, strlen(generator));
+        currentDividendChunk[strlen(generator)] = data[e + 1];
     }
 
     // Create a new data frame with CRC bits appended
-    char * data_with_crc = calloc(strlen(data_in) + strlen(generator) - 1, sizeof(char));
+    char * data_with_crc = calloc(strlen(data_in) + strlen(generator), sizeof(char));
     sprintf(data_with_crc, "%s%s", data_in, remainder);
+    remainder[strlen(remainder) - 1] = '\0';
 
     free(data);
     free(remainder);
@@ -62,14 +63,15 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     
 
     // Add space for 3 control chars
-    char buffer[FRAME_LEN + 3];
+    char buffer[FRAME_LEN + 3 + 1];
+    bzero(buffer, sizeof(buffer));
 
     // Read the frame from the producer through the encode pipe
     __ssize_t num_read = read(encode_pipe[0], buffer, sizeof(buffer));
-    close(encode_pipe[0]); 
+    close(encode_pipe[0]);
 
     // The data 
-    char data[(FRAME_LEN + 3) * 8 + 1]; // +1 for CRC flag
+    char data[(FRAME_LEN + 3) * 8 + 1 + 1]; // +1 for CRC flag
     memset(data, 0, strlen(data));
 
     // Append CRC flag
@@ -98,13 +100,15 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
         // Send the data with CRC bits, T = D+R
         char * crc_res = CRC(data);
         write(encode_pipe[1], crc_res, strlen(crc_res));
+        //printf("\nEncoded: %s\n", crc_res);
+        //free(crc_res);
         
        
     }
     else{ // Hamming TBD
     // for now just write the data with no CRC bits
         write(encode_pipe[1], data, strlen(data));
-        
+        //printf("\nEncoded: %s\n", data);
     }
 
     // Finished encoding, close pipe & return
