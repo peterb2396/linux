@@ -470,6 +470,11 @@ void* handle_client(void* arg) {
 
             their_history_file = fopen(their_history_path, "a+"); 
         }
+        
+        // Remove STX ASCII-2 Char that signified start of string
+        if (parsed_frame[strlen(parsed_frame) - 1] == 2)
+            parsed_frame[strlen(parsed_frame) - 1] = '\0'; 
+        
 
         
         // Store 'name: message' in history

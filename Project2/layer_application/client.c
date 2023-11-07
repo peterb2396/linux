@@ -189,6 +189,8 @@ void sendMessages(int server_socket, int pipefd[2])
             char new_message[sizeof(message) + sizeof(name) + 3];
             sprintf(new_message, "%s: %s", name, message);
 
+            
+
             // write the message to a temp file
             FILE* temp = fopen("temp.txt", "w");
             fprintf(temp, "%s", new_message);
