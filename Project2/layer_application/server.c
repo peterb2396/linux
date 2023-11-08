@@ -92,6 +92,7 @@ int main(int argc, char* argv[]) {
         perror("execl");  // If execl fails
         exit(EXIT_FAILURE);
     }
+    wait(NULL); // Accept connections after running debugs
     // Parent contiunues to start server
 
     int server_socket, client_socket, port;
@@ -314,11 +315,9 @@ void* handle_client(void* arg) {
 
     // Handle chat functionality
     while (1) {
-
         // Listen for client's frame message, will be 64 chars
         memset(buffer, 0, sizeof(buffer));
         ssize_t bytesRead = recv(client_socket, buffer, sizeof(buffer), 0);
-
         
         if (bytesRead < 0)
         {

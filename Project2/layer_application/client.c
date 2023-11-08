@@ -160,6 +160,7 @@ void timerHandler(int signum) {
 // We have gathered all frames of the message. Send it 
 void sendMessage()
 {
+    
     // At this point, we gathered the entire message in the temp file.
     // Process the message now, frame by frame.
     temp = fopen("../output/chat-debug/last_msg.inpf", "r"); // to read the chat message frame by frame
@@ -355,7 +356,7 @@ void sendMessage()
                         sprintf(malform_padding, "%d", malformPadding);
 
                         // Child process: Call service then die
-                        execl("../layer_physical/malformService", "malformService", malform_read, malform_write, malform_padding, CRC, (frame_index == frames - 1)? "1": "0", NULL);
+                        execl("../layer_physical/malformService", "malformService", malform_read, malform_write, malform_padding, CRC, ((frame_index == frames - 1)? "1": "0"), NULL);
                         perror("execl");  // If execl fails
                         exit(EXIT_FAILURE);
                     }
@@ -379,8 +380,10 @@ void sendMessage()
                 
                 // Write the encoded frame to the file, AND to the consumer to decode!
                 // Send the frame through the socket
-                send(server_socket, encoded_frame, sizeof(encoded_frame), 0);
-                
+                int res = send(server_socket, encoded_frame, strlen(encoded_frame), 0);
+                //printf("RES: %d\n", res);
+                //fflush(stdout);
+
 
                 // May contain a flipped bit now.
                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
@@ -455,8 +458,9 @@ void sendMessages(int pipefd[2])
             perror("Error reading user input");
             break;
         }
-            
-
+        
+        
+        
         // Check if the user wants to exit to print exiting
         if (strcmp(message, "/exit\n") == 0) {
             printf("Exiting...\n");
