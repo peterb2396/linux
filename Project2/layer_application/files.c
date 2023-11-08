@@ -89,6 +89,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // Store the file name without extension for naming future files
                     char *inpf = strndup(ent->d_name, strchr(ent->d_name, '.') - ent->d_name);
+                    printf("\n* Processing file %s:", inpf);
 
                     // Make a directory for these output files
                     char dirname[256]; 

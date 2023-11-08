@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    printf("Server listening on port %d\n", server_addr.sin_port);
+    printf("\nServer listening on port %d\n", server_addr.sin_port);
     fflush(stdout);
 
     // Create the parent chat directory if it doesn't exist
@@ -351,13 +351,6 @@ void* handle_client(void* arg) {
             clientDisconnected(client_socket);
             return NULL;
         }
-        // else if (strcmp(buffer, "|\n") == 0)
-        // {
-        //     continue;
-        // }
-
-        // Process the received message and send it to the appropriate recipient(s)
-
 
         // Grab the latest client socket
         client = findClientBySocket(client_socket);
@@ -366,7 +359,7 @@ void* handle_client(void* arg) {
         char tagged_frame[strlen(buffer) + strlen("<MSG></MSG>")];
         bzero(tagged_frame, sizeof(tagged_frame));
         sprintf(tagged_frame, "<MSG>%s</MSG>", buffer);
-        //tagged_frame[strlen(tagged_frame)] = '\0';
+        
         
         
         // Send the frame straight through to the recipient
@@ -487,8 +480,18 @@ void* handle_client(void* arg) {
         // Store decoded msg in chat histories: 
         // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
         my_history_file = fopen(my_history_path, "a+");
-        their_history_file = fopen(their_history_path, "a+"); 
+        their_history_file = fopen(their_history_path, "a+");
+        
+        // Make a new file if this is a new message
+        char prefix[strlen(client.name) + strlen(": ")];
+        sprintf(prefix, "%s: ", client.name);
+
+        // Delete the old message file
+        if (strncmp(parsed_frame, prefix, strlen(prefix)) == 0) {
+            remove("../output/chat-debug/last_msg.done");
+        }
         chat_debug_file = fopen("../output/chat-debug/last_msg.done", "a+");
+        
 
         // Handle errors for my history file (if manually deleted)
         if (my_history_file == NULL)
@@ -530,9 +533,6 @@ void* handle_client(void* arg) {
         fclose(my_history_file);
         fclose(their_history_file);
         fclose(chat_debug_file);
-        
-
-        
         
     }
 
