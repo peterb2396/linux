@@ -170,7 +170,7 @@ void* handle_client(void* arg) {
     int client_socket = *((int*)arg);
     char username[MAX_NAME_LENGTH];
     char password[MAX_PASS_LENGTH];
-    char buffer[(64 + 3)*8 + 1 + 32 + 1];
+    char buffer[(64 + 4)*8 + 1 + 32 + 1];
 
     Client client;
 
@@ -203,6 +203,12 @@ void* handle_client(void* arg) {
         {
             clientDisconnected(client_socket);
             return NULL;
+        }
+
+        else if (strcmp(buffer, "|") == 0) 
+        {
+            // Ignore this, it is just ACK
+            continue;
         }
 
         choice = atoi(buffer); // Convert ascii code to actual int choice
@@ -345,6 +351,10 @@ void* handle_client(void* arg) {
             clientDisconnected(client_socket);
             return NULL;
         }
+        // else if (strcmp(buffer, "|\n") == 0)
+        // {
+        //     continue;
+        // }
 
         // Process the received message and send it to the appropriate recipient(s)
 
@@ -362,10 +372,13 @@ void* handle_client(void* arg) {
         // Send the frame straight through to the recipient
         // it is in the format <MSG>00101000101110100010...</MSG>
         // Send to recipient if they are online
+        
         if (client.recip_socket >= 0)
             send(client.recip_socket, tagged_frame, strlen(tagged_frame), 0);
-
-        fflush(stdout);
+        
+        // wait for ack
+        // char ack[2];
+        // recv(client.recip_socket, ack, 1, 0);
 
         // Will decode and deframe
         char parsed_frame[65];
@@ -412,7 +425,7 @@ void* handle_client(void* arg) {
             waitpid(decode_pid, NULL, 0);;
 
             // Parent reads result from the child process (the decoded frame)
-            char decoded_frame[64 + 4 + 1]; // The decoded frame is 1/8 the size
+            char decoded_frame[64 + 4 + 1 + 1]; // The decoded frame is 1/8 the size
             bzero(decoded_frame, sizeof(decoded_frame));
                 // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
                 // Does not contain 32 CRC bits. DOES contain 4 control chars + 64 of data
@@ -475,7 +488,7 @@ void* handle_client(void* arg) {
         // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
         my_history_file = fopen(my_history_path, "a+");
         their_history_file = fopen(their_history_path, "a+"); 
-        chat_debug_file = fopen("../output/chat-debug/last_msg.done", "w");
+        chat_debug_file = fopen("../output/chat-debug/last_msg.done", "a+");
 
         // Handle errors for my history file (if manually deleted)
         if (my_history_file == NULL)
@@ -517,6 +530,7 @@ void* handle_client(void* arg) {
         fclose(my_history_file);
         fclose(their_history_file);
         fclose(chat_debug_file);
+        
 
         
         

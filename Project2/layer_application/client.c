@@ -27,7 +27,7 @@
 
 void receiveMessages(int pipefd[2]);
 void sendMessages(int pipefd[2]);
-void sendMessage();
+void sendMessage(int message_len_l);
 
 char SERVER_IP[16];
 int SERVER_PORT;
@@ -118,6 +118,10 @@ int main(int argc, char* argv[]) {
         // Parent process: responsible for sending messages
         close(pipefd[1]); // parent doesnt need to write. We are READING flags into the client
         sendMessages(pipefd);
+
+        // Random setup
+        unsigned int seed = (unsigned int)getpid();
+        srand(seed);
         
     }
     
@@ -148,7 +152,7 @@ void timerHandler(int signum) {
     if (message_len)
     {
         fclose(temp); // Save the message to the file
-        sendMessage(); // Process the message, we have the whole thing
+        sendMessage(message_len); // Process the message, we have the whole thing
 
         message_len = 0; // reset the len of the next message
         first_line = 1; // The next input will be a new message
@@ -158,7 +162,7 @@ void timerHandler(int signum) {
 }
 
 // We have gathered all frames of the message. Send it 
-void sendMessage()
+void sendMessage(int message_len_l)
 {
     
     // At this point, we gathered the entire message in the temp file.
@@ -167,14 +171,8 @@ void sendMessage()
     FILE * binfFile = fopen("../output/chat-debug/last_msg.binf", "w");
     FILE * frmeFile = fopen("../output/chat-debug/last_msg.frme", "w");
 
-    int frames = (int)ceil((double)message_len / (double)FRAME_LEN);
-    //  Get a random frame
-    unsigned int seed = (unsigned int)getpid();
-    srand(seed);
-
-    // between 0 and frames - 1
-    int r_frame = rand() % frames;
-
+    int frames = (int)ceil((double)message_len_l / (double)FRAME_LEN);
+    int r_frame = rand() % frames; // Malform a random frame
 
     int frame_index = 0;
     int num_read;
@@ -380,9 +378,7 @@ void sendMessage()
                 
                 // Write the encoded frame to the file, AND to the consumer to decode!
                 // Send the frame through the socket
-                int res = send(server_socket, encoded_frame, strlen(encoded_frame), 0);
-                //printf("RES: %d\n", res);
-                //fflush(stdout);
+                int res = send(server_socket, encoded_frame, encoded_len, 0);
 
 
                 // May contain a flipped bit now.
@@ -541,6 +537,7 @@ void sendMessages(int pipefd[2])
 
 
 void receiveMessages(int pipefd[2]) {
+    int chatting = 0;
     while (1) {
         
 
@@ -552,6 +549,19 @@ void receiveMessages(int pipefd[2]) {
 
         // Receive a message from the server
         ssize_t bytesRead = recv(server_socket, buffer2, sizeof(buffer2), 0);
+
+        if (chatting)
+        {
+            
+        }
+        
+        
+
+        
+        if (bytesRead > 800)
+        {
+            printf("GOT A BAD FRAME: %ld\nFRAME: %s", bytesRead, buffer2);
+        }
         
 
         if (bytesRead == -1) {
@@ -639,11 +649,16 @@ void receiveMessages(int pipefd[2]) {
                 else if (strcmp(tag, "ENCODE") == 0 )
                 {
                     write(pipefd[1], message, strlen(message));
+                    chatting = 1;
                 }
 
                 // Client has sent us a message. Display it
                 else if (strcmp(tag, "MSG") == 0 )
                 {
+                    // // send ack
+                    // char ack[2] = "|";
+                    // send(server_socket, ack, 1, 0);
+
                     // Will decode and deframe
                     char parsed_frame[65];
 
