@@ -23,7 +23,7 @@
 #define DEFAULT_SERVER_PORT 12345
 #define FRAME_LEN 64
 #define MAX_MSG_LEN 10000
-
+#define FILE_INTERVAL_USEC 100000
 
 void receiveMessages(int pipefd[2]);
 void sendMessages(int pipefd[2]);
@@ -163,6 +163,8 @@ void sendMessage()
     // At this point, we gathered the entire message in the temp file.
     // Process the message now, frame by frame.
     temp = fopen("../output/chat-debug/last_msg.inpf", "r"); // to read the chat message frame by frame
+    FILE * binfFile = fopen("../output/chat-debug/last_msg.binf", "w");
+    FILE * frmeFile = fopen("../output/chat-debug/last_msg.frme", "w");
 
     int frames = (int)ceil((double)message_len / (double)FRAME_LEN);
     //  Get a random frame
@@ -170,20 +172,14 @@ void sendMessage()
     srand(seed);
 
     // between 0 and frames - 1
-    int random_frame = rand() % frames;
+    int r_frame = rand() % frames;
 
-    //printf("Malformed frame: %d\n", random_frame + 1);
 
     int frame_index = 0;
     int num_read;
     char frame_buffer[FRAME_LEN + 1];
     // Read the input in chunks of FRAME_LEN, pipe & fork to frame.
     while ((num_read = fread(frame_buffer, 1, FRAME_LEN, temp)) > 0) {
-
-        FILE * binfFile = fopen("../output/chat-debug/last_msg.binf", "w");
-        FILE * frmeFile = fopen("../output/chat-debug/last_msg.frme", "w");
-        
-
 
         int malformPadding = 0;
         if (frame_index == 0)
@@ -193,8 +189,7 @@ void sendMessage()
             malformPadding += ((strlen(name) + 2) * 8); // Number of bits in the name section
         }
 
-        
-        
+
         // Create a pipe to communicate with frame.c
         int frame_pipe[2];
         if (pipe(frame_pipe) == -1) {
@@ -214,16 +209,18 @@ void sendMessage()
 
             char frame_read[10]; // Buffer for converting arg1 to a string
             char frame_write[10]; // Buffer for converting arg2 to a string
+            char frame_index_string[2]; //Buffer to convert frame_index to a string
 
             // Convert FD integers to strings
             // so they can be passed as args
 
             snprintf(frame_read, sizeof(frame_read), "%d", frame_pipe[0]);
             snprintf(frame_write, sizeof(frame_write), "%d", frame_pipe[1]);
+            sprintf(frame_index_string, "%d", (frame_index == r_frame)? frame_index + 1: 0);
             
             // Child process (frame.c)
             
-            execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, NULL);  // Execute frame.c
+            execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, frame_index_string, NULL);  // Execute frame.c
             perror("execl");  // If execl fails
             exit(EXIT_FAILURE);
         } else {
@@ -241,7 +238,7 @@ void sendMessage()
             
             
             // Parent reads result from the child process (the new frame)
-            char frame[68]; // The frame to be recieved will be stored here
+            char frame[69]; // The frame to be recieved will be stored here
             bzero(frame, sizeof(frame));
 
             // Read frame result
@@ -314,7 +311,7 @@ void sendMessage()
                 // Parent reads result from the child process (the encoded frame)
                 // Add space for control chars and bit conversion
                 // add 1 space for crc flag, add 32 for crc bits if CRC
-                char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + 1 + ((strcmp(CRC, "1") == 0)? 32: 0)]; // The encoded frame
+                char encoded_frame[(FRAME_LEN + 4) * 8 + 1 + 1 + ((strcmp(CRC, "1") == 0)? 32: 0)]; // The encoded frame
                 bzero(encoded_frame, sizeof(encoded_frame));
                 // Otherwise, would have old bytes in it
                     
@@ -327,7 +324,7 @@ void sendMessage()
 
                 // Simulate transmission error here
                 // Determine if this frame should be malformed to simulate error
-                if (frame_index == random_frame)
+                if (frame_index == r_frame)
                 {
                     int malform_pipe[2];
                     if (pipe(malform_pipe) == -1) {
@@ -392,8 +389,7 @@ void sendMessage()
         }
 
         // close frame debug temp files
-        fclose(binfFile);
-        fclose(frmeFile);
+        
         frame_index++;
 
         
@@ -401,7 +397,8 @@ void sendMessage()
 
     }
     fclose(temp);
-    //remove("temp-chat.txt");
+    fclose(binfFile);
+    fclose(frmeFile);
     
 }
 
@@ -420,7 +417,7 @@ void sendMessages(int pipefd[2])
 
     struct itimerval timer;
     timer.it_value.tv_sec = 0;        // Initial timer value, seconds
-    timer.it_value.tv_usec = 30000;  // Initial timer value, microseconds (5 ms)
+    timer.it_value.tv_usec = FILE_INTERVAL_USEC;  // Initial timer value, microseconds (5 ms)
     timer.it_interval.tv_sec = 0;    // Timer interval (0 means no repeat)
     timer.it_interval.tv_usec = 0;
 
@@ -487,7 +484,7 @@ void sendMessages(int pipefd[2])
             // after 1s, consider the next message a new message
             // Reset the timer while its running (or after it expired)
             timer.it_value.tv_sec = 0;
-            timer.it_value.tv_usec = 30000;
+            timer.it_value.tv_usec = FILE_INTERVAL_USEC;
             setitimer(ITIMER_REAL, &timer, NULL);
 
             // Update the size of the message (for counting frames)
@@ -688,7 +685,7 @@ void receiveMessages(int pipefd[2]) {
                         waitpid(decode_pid, NULL, 0);;
 
                         // Parent reads result from the child process (the decoded frame)
-                        char decoded_frame[64 + 3 + 1]; // The decoded frame is 1/8 the size
+                        char decoded_frame[64 + 4 + 1]; // The decoded frame is 1/8 the size
                         bzero(decoded_frame, sizeof(decoded_frame));
                             // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
                             // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data

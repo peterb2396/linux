@@ -62,8 +62,8 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
 {
     
 
-    // Add space for 3 control chars
-    char buffer[FRAME_LEN + 3 + 1];
+    // Add space for 4 control chars
+    char buffer[FRAME_LEN + 4 + 1];
     bzero(buffer, sizeof(buffer));
 
     // Read the frame from the producer through the encode pipe
@@ -71,7 +71,7 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     close(encode_pipe[0]);
 
     // The data 
-    char data[(FRAME_LEN + 3) * 8 + 1 + 1]; // +1 for CRC flag
+    char data[(FRAME_LEN + 4) * 8 + 1 + 1]; // +1 for CRC flag
     memset(data, 0, strlen(data));
 
     // Append CRC flag
@@ -82,7 +82,7 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     for (int i = 0; i < num_read; i++) {
         char ch = buffer[i];
         // Send the parity bit through the pipe, first
-        strcat(data, __builtin_parity((int)ch)? "0" : "1"); // add the parity bit to the encoded data string
+        strcat(data, __builtin_parity((int)ch)? "1" : "0"); // add the parity bit to the encoded data string
 
         // For the next 7 bits...
         for (int i = 6; i >= 0; i--) {

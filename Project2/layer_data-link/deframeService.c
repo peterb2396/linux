@@ -13,12 +13,12 @@
 int deframeFrame(int deframe_pipe[2])
 {
     
-    // Add space for 3 control characters and \0
+    // Add space for 4 control characters and \0
     // Note this will not include any crc flag or bits because they are removed by
     // the decode service.
-    char buffer[FRAME_LEN + 4];
+    char buffer[FRAME_LEN + 4 + 1];
     bzero(buffer, sizeof(buffer));
-    char* chunk = &buffer[3]; // Will point to actual content ignoring control chars
+    char* chunk = &buffer[4]; // Will point to actual content ignoring control chars
     
     
     // Read the framed chunk from the producer through the deframe pipe
@@ -28,7 +28,7 @@ int deframeFrame(int deframe_pipe[2])
     close(deframe_pipe[0]);
     // Send the deframed chunk through the pipe. It will be 3 chars shorter than input.
     
-    write(deframe_pipe[1], chunk, num_read - 3);
+    write(deframe_pipe[1], chunk, num_read - 4);
 
     // close this writing pipe, we are done
     close(deframe_pipe[1]);

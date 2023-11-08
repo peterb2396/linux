@@ -165,9 +165,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     srand(seed);
 
                     // between 0 and frames - 1
-                    int random_frame = rand() % frames;
-                    printf("File Debug (%s): CRC DETECTED AN ERROR IN FRAME %d/%d\n",inpf, random_frame + 1,frames);
-
+                    int r_frame = rand() % frames;
+                    
 
                     int frame_index = 0;
                     // Read the input in chunks of FRAME_LEN, pipe & fork to frame.
@@ -194,16 +193,16 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                             char frame_read[10]; // Buffer for converting arg1 to a string
                             char frame_write[10]; // Buffer for converting arg2 to a string
-
+                            char frame_index_string[2];
                             // Convert FD integers to strings
                             // so they can be passed as args
 
                             snprintf(frame_read, sizeof(frame_read), "%d", frame_pipe[0]);
                             snprintf(frame_write, sizeof(frame_write), "%d", frame_pipe[1]);
-                            
+                            sprintf(frame_index_string, "%d", (frame_index == r_frame)? frame_index + 1: 0);
                             // Child process (frame.c)
                             
-                            execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, NULL);  // Execute frame.c
+                            execl("../layer_data-link/frameService", "frameService", frame_read, frame_write, frame_index_string, NULL);  // Execute frame.c
                             perror("execl");  // If execl fails
                             exit(EXIT_FAILURE);
                         } else {
@@ -221,7 +220,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                             
                             
                             // Parent reads result from the child process (the new frame)
-                            char frame[68]; // The frame to be recieved will be stored here
+                            char frame[69]; // The frame to be recieved will be stored here
                             bzero(frame, sizeof(frame));
 
                             // Read frame result
@@ -293,7 +292,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 
 
                                 // Problem child buffer
-                                char encoded_frame[(FRAME_LEN + 3) * 8 + 1 + 1 + ((strcmp(CRC_FLAG, "1") == 0)? 32: 0)]; // The encoded frame
+                                char encoded_frame[(FRAME_LEN + 4) * 8 + 1 + 1 + ((strcmp(CRC_FLAG, "1") == 0)? 32: 0)]; // The encoded frame
                                 bzero(encoded_frame, sizeof(encoded_frame));
                                 // Otherwise, would have old bytes in it
                                     
@@ -307,7 +306,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                                 // Simulate transmission error here
                                 // Determine if this frame should be malformed to simulate error
-                                if (frame_index == random_frame)
+                                if (frame_index == r_frame)
                                 {
                                     int malform_pipe[2];
                                     if (pipe(malform_pipe) == -1) {
@@ -394,7 +393,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     FILE* outfFile;
 
     // Now add 32 bits for CRC
-    char message[(67 * 8) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
+    char message[((64 + 4) * 8) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
     char *inpf;           // name of input file currently being processed
 
     while (1) {
@@ -466,7 +465,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
                 
                 // Child process: Call encode then die
-                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "0",NULL);
+                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "1" ,NULL);
                 perror("execl");  // If execl fails
                 exit(EXIT_FAILURE);
             }
@@ -481,10 +480,10 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 waitpid(decode_pid, NULL, 0);;
 
                 // Parent reads result from the child process (the decoded frame)
-                char decoded_frame[FRAME_LEN + 3]; // The decoded frame is 1/8 the size
+                char decoded_frame[FRAME_LEN + 5]; // The decoded frame is 1/8 the size
                 bzero(decoded_frame, sizeof(decoded_frame));
                     // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-                    // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data
+                    // Does not contain 32 CRC bits. DOES contain 4 control chars + 64 of data
 
                 // Listen for & store decoded frame
                 int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));

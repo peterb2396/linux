@@ -7,9 +7,10 @@
 #include "../encDec.h"
 
 #define FRAME_LEN 64
+int frame = 0; // the frame index 
 
 // Read incoming data chunk and write back
-// version with 3 control characters added
+// version with 4 control characters added
 int frameChunk(int frame_pipe[2])
 {
     // Include space for \0
@@ -21,22 +22,16 @@ int frameChunk(int frame_pipe[2])
     
     close(frame_pipe[0]);
 
-    char control[3];
+    char control[4];
     control[0] = (char)22;  // First SYN character
     control[1] = (char)22;  // Second SYN character
     control[2] = (char)num_read;  // Length
-
-    // char res[num_read + 3];
-    // sprintf(res, "%c%c%c%s", (char)22, (char)22, (char)num_read, buffer);
-    
-    // int ress = write(frame_pipe[1], res, num_read + 3);
+    control[3] = (char)(frame+1);  // Index
 
     // Send ctrl characters through the pipe. Then, send the data block
     write(frame_pipe[1], control, sizeof(control));
     write(frame_pipe[1], buffer, num_read);
 
-    
-    
 
     // close this writing pipe, we are done
     close(frame_pipe[1]);
@@ -58,6 +53,7 @@ int main(int argc, char *argv[]) {
 
     frame_pipe[0] = atoi(argv[1]); // Assign the first integer
     frame_pipe[1] = atoi(argv[2]); // Assign the second integer
+    frame = atoi(argv[3]); // Store the frame index
 
     return frameChunk(frame_pipe);
 }

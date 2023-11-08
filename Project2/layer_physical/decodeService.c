@@ -8,6 +8,7 @@
 #define FRAME_LEN 64
 char * generator = "100000100110000001001110110110111";
 int debug = 0;
+int frame = 0;
 
 
 // Helper power function
@@ -31,7 +32,6 @@ int checkCRC(char * data) {
 
     // Initialize dividend
     strncpy(currentDividendChunk, data, strlen(generator));
-    int count = 1;
 
     // Division Loop
     for (int e = strlen(generator) - 1; e < strlen(data); e++) {
@@ -54,12 +54,12 @@ int checkCRC(char * data) {
     remainder[strlen(remainder) - 1] = '\0';
 
     // Check if the remainder is all zeros
-    for (int j = 0; j < count; j++)
+    for (int j = 0; j < strlen(remainder); j++)
     {
         if (remainder[j] != '0') {
-            // If any non-zero remainder is found, an error is detected
+            // If any non-zero remainder is found, an error is detected in this frame
             if(debug)
-                printf("CRC DETECTED ERROR IN THIS FRAME: \n");
+                printf("\nCRC DETECTED ERROR (FRAME %d):\n", frame);
             free(remainder);
             free(currentDividendChunk);
             
@@ -78,37 +78,43 @@ int checkCRC(char * data) {
 // returns the characters for each byte.
 int decodeFrame(int decode_pipe[2])
 {
-    // Add space for the data and 3 control bytes * 8 bits for each
+    // Add space for the data and 4 control bytes * 8 bits for each
     // Now, also add space for 32 CRC bits and 1 crc flag 
-    char buffer[(FRAME_LEN + 3) * 8 + strlen(generator) + 1 + 50];
+    char buffer[(FRAME_LEN + 4) * 8 + strlen(generator) + 1 + 50];
     bzero(buffer, sizeof(buffer));
     
 
     // Read the chunk from the consumer through the decode pipe
     __ssize_t num_read = read(decode_pipe[0], buffer, sizeof(buffer));
     buffer[sizeof(buffer)] = '\0';
-    //printf("\nDecoding: %s\n", buffer);
+    
+    int num = 0; //the ascii value of this byte
+        // For each bit in the byte
+        for (int j = 0; j < 8; j++)
+            num += ((j == 0)? 0: (((int)buffer[25+j] - 48) * power(2, (7-j))));
+    frame = num - 1;
+            
     
     close(decode_pipe[0]);
 
-    char res[68];
-    bzero(res, 68);
+    char res[69];
+    bzero(res, 69);
     
     int crc_flag = (int)buffer[0] - 48;
 
     // Check bits for error before converting
-    if(crc_flag)
+    if(crc_flag && frame)
     {
         checkCRC(buffer);
     }
-    else{
+    else if (frame){
         //hamming TBD
     }
 
     // For each byte... but NOT the 32/8 CRC bytes
     // AND NOT THE FIRST CRC BYTE!
     for (int i = 1; i < (strlen(buffer) - (crc_flag? 32: 0)); i+=8) {
-        int num = 0; //the ascii value of this byte
+        num = 0; //the ascii value of this byte
         //printf("\n");
         // For each bit in the byte
         for (int j = 0; j < 8; j++)

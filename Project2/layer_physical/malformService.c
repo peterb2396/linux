@@ -5,8 +5,8 @@
 
 #include "../encDec.h"
 
-// Start after control characters (3x 8) + 1 crc bit
-#define L_BOUND 25
+// Start after control characters (4x 8) + 1 crc bit
+#define L_BOUND 33
 
 // Malforms a provided data frame by choosing
 // a random bit within it and flipping it.

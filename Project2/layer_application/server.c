@@ -366,6 +366,8 @@ void* handle_client(void* arg) {
         if (client.recip_socket >= 0)
             send(client.recip_socket, tagged_frame, strlen(tagged_frame), 0);
 
+        fflush(stdout);
+
         // Will decode and deframe
         char parsed_frame[65];
 
@@ -411,10 +413,10 @@ void* handle_client(void* arg) {
             waitpid(decode_pid, NULL, 0);;
 
             // Parent reads result from the child process (the decoded frame)
-            char decoded_frame[64 + 3 + 1]; // The decoded frame is 1/8 the size
+            char decoded_frame[64 + 4 + 1]; // The decoded frame is 1/8 the size
             bzero(decoded_frame, sizeof(decoded_frame));
                 // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-                // Does not contain 32 CRC bits. DOES contain 3 control chars + 64 of data
+                // Does not contain 32 CRC bits. DOES contain 4 control chars + 64 of data
 
             // Listen for & store decoded frame
             int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
