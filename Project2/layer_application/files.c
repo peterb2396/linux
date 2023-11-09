@@ -14,7 +14,7 @@
 #define _XOPEN_SOURCE 500
 #define NEW_FILE_NAME 28
 #define FRAME_LEN 64
-#define CRC_FLAG "1"
+char CRC_FLAG[2];
 
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path);
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]);
@@ -82,6 +82,15 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                 FILE* input_file = fopen(input_file_path, "r");
 
                 if (input_file != NULL) {
+
+                    // Random CRC
+                    //  Get a random frame
+                    unsigned int seed = (unsigned int)getpid();
+                    srand(seed);
+
+                    // between 0 and frames - 1
+                    int r_crc = rand() % 2;
+                    sprintf(CRC_FLAG, "%s", (r_crc? "1": "0"));
                     
                     // Prepare a buffer to read a chunk of data from the input
                     char buffer[FRAME_LEN + 1];
@@ -161,10 +170,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     // frames is chars / frame length
                     int frames = ceil(length / FRAME_LEN);
 
-                    //  Get a random frame
-                    unsigned int seed = (unsigned int)getpid();
-                    srand(seed);
-
+                
                     // between 0 and frames - 1
                     int r_frame = rand() % frames;
                     
@@ -397,7 +403,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     FILE* outfFile;
 
     // Now add 32 bits for CRC - hamming uses 7 bit words crc uses 8 (parity)
-    char message[((64 + 4) * (strcmp("1", CRC_FLAG) == 0? 8: 7)) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 10)]; // encoded stream 
+    char message[750]; // encoded stream 
     char *inpf;           // name of input file currently being processed
 
     while (1) {
@@ -413,8 +419,10 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
         // Must signal this for each input file that we begin to process
         if ((int)message[0] == NEW_FILE_NAME)
         {
+
             // New file name is a pointer to the string beginning after the control char
-            inpf = &message[1]; 
+            inpf = &message[1];
+
             
             // Create the new consumer files
 
@@ -559,8 +567,6 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     }
     
     }
-    // Finally, close the last opened files
-    //fseek(outfFile, -1, SEEK_END);
-    //ftruncate(fileno(outfFile), ftell(outfFile));
+    // Finally, close the last opened file
     fclose(outfFile);
 }

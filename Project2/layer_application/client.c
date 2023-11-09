@@ -25,16 +25,19 @@
 #define MAX_MSG_LEN 10000
 #define FILE_INTERVAL_USEC 100000
 
+// Client can send and recieve messages
 void receiveMessages(int pipefd[2]);
+void receiveMessage(const char* content);
 void sendMessages(int pipefd[2]);
 void sendMessage(int message_len_l);
-void processMsg(const char* content);
 
+
+// Store the server details
 char SERVER_IP[16];
 int SERVER_PORT;
 int server_socket;
 
-
+// Take arguments to be connection address, not necessary for localhost
 int main(int argc, char* argv[]) {
     if (argc == 1) 
     {
@@ -572,7 +575,7 @@ void receiveMessages(int pipefd[2]) {
                 //printf("\nASS: %s\n", contentBuffer);
 
                 // Process the content
-                processMsg(contentBuffer);
+                receiveMessage(contentBuffer);
 
                 // Move the start pointer to the character after </MSG>
                 start = end + 6;
@@ -675,7 +678,7 @@ void receiveMessages(int pipefd[2]) {
                 else if (strcmp(tag, "MSG") == 0 )
                 {
                     // Chat message: decode and print it
-                    processMsg(message);
+                    receiveMessage(message);
                     
                 }
 
@@ -697,7 +700,7 @@ void receiveMessages(int pipefd[2]) {
 }
 
 // Process and print the decoded result
-void processMsg(const char *content) {
+void receiveMessage(const char *content) {
 
     // Will decode and deframe
     char parsed_frame[65];
