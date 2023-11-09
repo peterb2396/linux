@@ -15,10 +15,14 @@
 #define NEW_FILE_NAME 28
 #define FRAME_LEN 64
 char CRC_FLAG[2];
+int fileCount = 0;
 
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path);
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]);
 
+// This code will simulation transmition, error detection and error correction
+// for each of the files in the input folder. It will show intermediate files for
+// framing, encoding, and results.
 // Will fork to seperate processes for Producer and Consumer
 // Beforehand, creates one pipe each way to go between the two.
 int main() {
@@ -83,14 +87,12 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                 if (input_file != NULL) {
 
-                    // Random CRC
-                    //  Get a random frame
+                    // Prepare randomizer for malforming
                     unsigned int seed = (unsigned int)getpid();
                     srand(seed);
 
-                    // between 0 and frames - 1
-                    int r_crc = rand() % 2;
-                    sprintf(CRC_FLAG, "%s", (r_crc? "1": "0"));
+                    // Every other file will use CRC
+                    sprintf(CRC_FLAG, "%s", ((fileCount++)%2? "1": "0"));
                     
                     // Prepare a buffer to read a chunk of data from the input
                     char buffer[FRAME_LEN + 1];
@@ -98,7 +100,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
 
                     // Store the file name without extension for naming future files
                     char *inpf = strndup(ent->d_name, strchr(ent->d_name, '.') - ent->d_name);
-                    printf("\n* Processing file %s:", inpf);
+                    
 
                     // Make a directory for these output files
                     char dirname[256]; 
@@ -120,11 +122,14 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     
 
                     // Notify consumer to create chage their file reference / make the new files
+                    bzero(buffer, strlen(buffer));
                     sprintf(buffer, "%c%s", NEW_FILE_NAME, inpf);
+                    
                     write(ptoc_pipe[1], buffer, sizeof(buffer));
 
                     // prepare file.binf
-                    char binf_file_name[50]; 
+                    char binf_file_name[256]; 
+                    bzero(binf_file_name, sizeof(binf_file_name));
                     snprintf(binf_file_name, sizeof(binf_file_name), "../output/Inpf-Results/%s/%s.binf", inpf, inpf);
                     binfFile = fopen(binf_file_name, "w");
 
@@ -135,7 +140,8 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     }
 
                     // prepare file.frme
-                    char frme_file_name[50]; 
+                    char frme_file_name[256]; 
+                    bzero(frme_file_name, sizeof(frme_file_name));
                     snprintf(frme_file_name, sizeof(frme_file_name), "../output/Inpf-Results/%s/%s.frme", inpf, inpf);
                     frmeFile = fopen(frme_file_name, "w");
 
@@ -396,20 +402,169 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
     close(ctop_pipe[0]);
 }
 
+void switchContext(FILE** outfFile, char* inpf)
+{
+    // prepare the outf file in the "output" folder
+    char outf_file_name[256];
+    bzero(outf_file_name, sizeof(outf_file_name));
+    
+    
+    snprintf(outf_file_name, sizeof(outf_file_name), "../output/Inpf-Results/%s/%s.outf", inpf, inpf);
+
+    fflush(stdout);
+    *outfFile = fopen(outf_file_name, "w");
+
+
+    if (outfFile == NULL) {
+        perror("fopen");
+        return;
+    }
+
+    printf("\n* Processing file %s:", inpf);
+    fflush(stdout);
+
+        
+}
+
+void receiveFrame(char* message, FILE** outfFile)
+{
+    // *** .outf PROCESS ***
+
+        // DECODE
+// Pipe before forking to share a pipe for 
+        // transmission of data
+        int decode_pipe[2];
+        if (pipe(decode_pipe) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+
+        
+
+        
+        
+        // Attempt to fork so child can exec the subroutine
+        fflush(stdout);
+        pid_t decode_pid = fork();
+        if (decode_pid == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        // Decode this single frame
+        if (decode_pid == 0)
+        {
+            // Make string versions of the pipe id's to pass to argv
+            char decode_read[10]; // Buffer for converting arg1 to a string
+            char decode_write[10]; // Buffer for converting arg2 to a string
+
+            // Convert integers to strings
+            snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
+            snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
+            
+            // Child process: Call encode then die
+            execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "1" ,NULL);
+            perror("execl");  // If execl fails
+            exit(EXIT_FAILURE);
+        }
+        else // Parent
+        {
+            // Write data to be decoded through decode pipe
+            write(decode_pipe[1], message, strlen(message));
+            
+            close(decode_pipe[1]);  // Done writing frame to be decoded
+            
+            // When child is done, read result
+            waitpid(decode_pid, NULL, 0);
+
+            // Parent reads result from the child process (the decoded frame)
+            char decoded_frame[FRAME_LEN + 5]; // The decoded frame is 1/8 the size
+            bzero(decoded_frame, sizeof(decoded_frame));
+                // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
+                // Does not contain 32 CRC bits. DOES contain 4 control chars + 64 of data
+
+            // Listen for & store decoded frame
+            int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
+            close(decode_pipe[0]);  // Done reading encode data
+
+            // Here, we have the decoded frame!
+
+            // Now, it's time to deframe it back to a chunk.
+            
+
+            // Create a pipe to communicate with deframe.c
+            int deframe_pipe[2];
+            if (pipe(deframe_pipe) == -1) {
+                perror("pipe");
+                exit(EXIT_FAILURE);
+            }
+            fflush(stdout);
+            pid_t deframe_pid = fork();
+
+            if (deframe_pid == -1) {
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }
+
+            if (deframe_pid == 0) {
+                char deframe_read[10]; // Buffer for converting arg1 to a string
+                char deframe_write[10]; // Buffer for converting arg2 to a string
+
+                // Convert integers to strings
+                snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
+                snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
+                
+                // Child process (deframe.c)
+                execl("../layer_data-link/deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
+                perror("execl");  // If execl fails
+                exit(EXIT_FAILURE);
+            } else {
+                // Parent process
+                // Write data to be framed to deframe.c through the deframe pipe
+                write(deframe_pipe[1], decoded_frame, decoded_len);
+                
+                close(deframe_pipe[1]);
+                
+
+                // When child is done, read chunk (ctrl chars removed)
+                
+                waitpid(deframe_pid, NULL, 0);
+                
+                char chunk[FRAME_LEN]; // The frame to be recieved will be stored here
+                bzero(chunk, sizeof(chunk));
+                
+
+                int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
+                close(deframe_pipe[0]); 
+                
+
+                fwrite(chunk, sizeof(char), chunk_len, *outfFile);
+                
+
+        }
+    
+    
+}
+    
+        
+        
+
+        
+
+}
 // Responsible for recieving data and modifying it, then sending back
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
-    
     // Define file pointers
     FILE* outfFile;
 
     // Now add 32 bits for CRC - hamming uses 7 bit words crc uses 8 (parity)
     char message[750]; // encoded stream 
     char *inpf;           // name of input file currently being processed
+    
 
+    
     while (1) {
+        bzero(message, sizeof(message));
         ssize_t bytes_read = read(ptoc_pipe[0], message, sizeof(message));
-        
-
 
         if (bytes_read <= 0) {
             break; // End of processing
@@ -419,154 +574,46 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
         // Must signal this for each input file that we begin to process
         if ((int)message[0] == NEW_FILE_NAME)
         {
-
             // New file name is a pointer to the string beginning after the control char
             inpf = &message[1];
+            switchContext(&outfFile, inpf);
+            continue; // Context switched. Now, listen for the next file content back at the loop
 
-            
-            // Create the new consumer files
-
-            // prepare the outf file in the "output" folder
-            char outf_file_name[256]; 
-            snprintf(outf_file_name, sizeof(outf_file_name), "../output/Inpf-Results/%s/%s.outf", inpf, inpf);
-            outfFile = fopen(outf_file_name, "w");
-
-
-            if (outfFile == NULL) {
-                perror("fopen");
-                return;
-            }
-
-         
 
         }
+        
+        // read() calls were grouped together. Must split it up 
+        char *ptr = strchr(message, NEW_FILE_NAME);
+
+        if (ptr != NULL) {
+            // Calculate the positions of the split character
+            size_t position = ptr - message;
+
+            // Create two new strings
+            char oldData[position + 1];
+            char newFile[strlen(message) - position];
+            bzero(newFile, sizeof(newFile));
+            bzero(oldData, sizeof(oldData));
+
+            strncpy(oldData, message, position);
+            oldData[position] = '\0';
+
+            strcpy(newFile, ptr + 1);
+
+            
+            // Finish the last frame of the old file
+            receiveFrame(oldData, &outfFile);
+            // then newFile needs to do a context switch
+            // prepare the outf file in the "output" folder
+            switchContext(&outfFile, newFile);
+            
+
+        }
+        
         else // we are reading data
         {
-            
-                    // *** .outf PROCESS ***
-
-                // DECODE
-
-            // Pipe before forking to share a pipe for 
-            // transmission of data
-            int decode_pipe[2];
-            if (pipe(decode_pipe) == -1) {
-                perror("pipe");
-                exit(EXIT_FAILURE);
-            }
-
-            
-
-            
-            
-            // Attempt to fork so child can exec the subroutine
-            fflush(stdout);
-            pid_t decode_pid = fork();
-            if (decode_pid == -1) {
-                perror("fork");
-                exit(EXIT_FAILURE);
-            }
-            // Decode this single frame
-            if (decode_pid == 0)
-            {
-                // Make string versions of the pipe id's to pass to argv
-                char decode_read[10]; // Buffer for converting arg1 to a string
-                char decode_write[10]; // Buffer for converting arg2 to a string
-
-                // Convert integers to strings
-                snprintf(decode_read, sizeof(decode_read), "%d", decode_pipe[0]);
-                snprintf(decode_write, sizeof(decode_write), "%d", decode_pipe[1]);
-                
-                // Child process: Call encode then die
-                execl("../layer_physical/decodeService", "decodeService", decode_read, decode_write, "1" ,NULL);
-                perror("execl");  // If execl fails
-                exit(EXIT_FAILURE);
-            }
-            else // Parent
-            {
-                // Write data to be decoded through decode pipe
-                write(decode_pipe[1], message, bytes_read);
-                
-                close(decode_pipe[1]);  // Done writing frame to be decoded
-                
-                // When child is done, read result
-                waitpid(decode_pid, NULL, 0);
-
-                // Parent reads result from the child process (the decoded frame)
-                char decoded_frame[FRAME_LEN + 5]; // The decoded frame is 1/8 the size
-                bzero(decoded_frame, sizeof(decoded_frame));
-                    // NOTE 67 (frame len) * 9 with spaces, *8 without, is perfect amount
-                    // Does not contain 32 CRC bits. DOES contain 4 control chars + 64 of data
-
-                // Listen for & store decoded frame
-                int decoded_len = read(decode_pipe[0], decoded_frame, sizeof(decoded_frame));
-                close(decode_pipe[0]);  // Done reading encode data
-
-                // Here, we have the decoded frame!
-
-                // Now, it's time to deframe it back to a chunk.
-                
-
-                // Create a pipe to communicate with deframe.c
-                int deframe_pipe[2];
-                if (pipe(deframe_pipe) == -1) {
-                    perror("pipe");
-                    exit(EXIT_FAILURE);
-                }
-                fflush(stdout);
-                pid_t deframe_pid = fork();
-
-                if (deframe_pid == -1) {
-                    perror("fork");
-                    exit(EXIT_FAILURE);
-                }
-
-                if (deframe_pid == 0) {
-                    char deframe_read[10]; // Buffer for converting arg1 to a string
-                    char deframe_write[10]; // Buffer for converting arg2 to a string
-
-                    // Convert integers to strings
-                    snprintf(deframe_read, sizeof(deframe_read), "%d", deframe_pipe[0]);
-                    snprintf(deframe_write, sizeof(deframe_write), "%d", deframe_pipe[1]);
-                    
-                    // Child process (deframe.c)
-                    execl("../layer_data-link/deframeService", "deframeService", deframe_read, deframe_write, NULL);  // Execute deframe.c
-                    perror("execl");  // If execl fails
-                    exit(EXIT_FAILURE);
-                } else {
-                    // Parent process
-                    // Write data to be framed to deframe.c through the deframe pipe
-                    write(deframe_pipe[1], decoded_frame, decoded_len);
-                    
-                    close(deframe_pipe[1]);
-                    
-
-                    // When child is done, read chunk (ctrl chars removed)
-                    
-                    waitpid(deframe_pid, NULL, 0);
-                    
-                    char chunk[FRAME_LEN]; // The frame to be recieved will be stored here
-                    bzero(chunk, sizeof(chunk));
-                    
-
-                    int chunk_len = read(deframe_pipe[0], chunk, sizeof(chunk));
-                    close(deframe_pipe[0]); 
-                    
-
-                    fwrite(chunk, sizeof(char), chunk_len, outfFile);
-                    
-
-            }
-            
-            
+            receiveFrame(message, &outfFile);
         }
-        
-        
-
-        
-    }
     
     }
-    // Finally, close the last opened file
-    fclose(outfFile);
 }

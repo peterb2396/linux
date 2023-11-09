@@ -22,7 +22,7 @@ int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int las
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
     
-    int message_len = (strlen(buffer) - (crc_flag? 32: 0) - (last && crc_flag? 8: 0)- padding);    
+    int message_len = (strlen(buffer) - (crc_flag? 32: 0) - (last? 8: 0)- padding);    
 
     //printf("%d, %d\n", padding, message_len);
     //printf("pad: %d\n", malform_padding);

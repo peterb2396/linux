@@ -59,7 +59,12 @@ int checkCRC(char * data) {
         if (remainder[j] != '0') {
             // If any non-zero remainder is found, an error is detected in this frame
             if(debug)
+            {
                 printf("\nCRC DETECTED ERROR (FRAME %d):\n", frame);
+                fflush(stdout);
+            }
+                
+            
             free(remainder);
             free(currentDividendChunk);
             
@@ -200,7 +205,7 @@ int decodeFrame(int decode_pipe[2])
         checkCRC(buffer);
     }
     else if (!crc_flag){ // Hamming code
-    
+
         // check + correct hamming
         checkHamming(&buffer[1 + 7*4]);
 
