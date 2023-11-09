@@ -5,18 +5,17 @@
 
 #include "../encDec.h"
 
-// Start after control characters (4x 8) + 1 crc bit
-#define L_BOUND 33
 
 // Malforms a provided data frame by choosing
 // a random bit within it and flipping it.
 
 int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int last)
 {
-    char buffer[600]; // SPace for encoded frame
+    // Start after control characters (4x 8:7) + 1 crc bit
+    int padding = 1 + (4 * (crc_flag? 8:7)) + malform_padding;
+
+    char buffer[750]; // SPace for encoded frame
     bzero(buffer, sizeof(buffer));
-    // Do not allow malform to affect these first n bits:
-    int padding = L_BOUND + malform_padding;
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
@@ -38,8 +37,8 @@ int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int las
     // 8 bits. choose 0 to 7
     int random_bit = (rand() % message_len) + (padding + 1);
 
-    // Make sure the bit is not a parity bit
-    if ((random_bit - (padding + 1)) % 8 == 0)
+    // Make sure the bit is not a parity bit: matters only if CRC
+    if (crc_flag && (random_bit - (padding + 1)) % 8 == 0)
     {
         // If it was a parity bit, chose a random bit in this byte.
         random_bit+= (rand() % 7) + 1;

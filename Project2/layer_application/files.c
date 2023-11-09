@@ -14,7 +14,7 @@
 #define _XOPEN_SOURCE 500
 #define NEW_FILE_NAME 28
 #define FRAME_LEN 64
-#define CRC_FLAG "1"
+#define CRC_FLAG "0"
 
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path);
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]);
@@ -293,12 +293,13 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 
 
                                 // Problem child buffer
-                                char encoded_frame[(FRAME_LEN + 4) * 8 + 1 + 1 + ((strcmp(CRC_FLAG, "1") == 0)? 32: 0)]; // The encoded frame
+                                char encoded_frame[(FRAME_LEN + 4) * (strcmp("1", CRC_FLAG) == 0? 8: 7) + 1 + 1 + ((strcmp(CRC_FLAG, "1") == 0)? 32: 10)]; // The encoded frame
                                 bzero(encoded_frame, sizeof(encoded_frame));
                                 // Otherwise, would have old bytes in it
-                                    
+                                
                                 // Listen for & store encoded frame
                                 int encoded_len = read(encode_pipe[0], encoded_frame, sizeof(encoded_frame));
+                                
                                 
                                 close(encode_pipe[0]);  // Done reading encode data
 
@@ -360,8 +361,10 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                                 // Write the encoded frame to the file, AND to the consumer to decode!
 
                                 // May contain a flipped bit now.
+                                
                                 fwrite(encoded_frame, sizeof(char), encoded_len, binfFile);
                                 write(ptoc_pipe[1], encoded_frame, encoded_len);
+                                
                                 
 
                             }
@@ -393,8 +396,8 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     // Define file pointers
     FILE* outfFile;
 
-    // Now add 32 bits for CRC
-    char message[((64 + 4) * 8) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 0)]; // encoded stream 
+    // Now add 32 bits for CRC - hamming uses 7 bit words crc uses 8 (parity)
+    char message[((64 + 4) * (strcmp("1", CRC_FLAG) == 0? 8: 7)) + 2 + (strcmp("1", CRC_FLAG) == 0? 32: 10)]; // encoded stream 
     char *inpf;           // name of input file currently being processed
 
     while (1) {
@@ -431,6 +434,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
         }
         else // we are reading data
         {
+            
                     // *** .outf PROCESS ***
 
                 // DECODE
@@ -478,7 +482,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
                 close(decode_pipe[1]);  // Done writing frame to be decoded
                 
                 // When child is done, read result
-                waitpid(decode_pid, NULL, 0);;
+                waitpid(decode_pid, NULL, 0);
 
                 // Parent reads result from the child process (the decoded frame)
                 char decoded_frame[FRAME_LEN + 5]; // The decoded frame is 1/8 the size

@@ -184,9 +184,10 @@ void sendMessage(int message_len_l)
         int malformPadding = 0;
         if (frame_index == 0)
         {
+            
             // If this is the first frame, our name will be aded.
             // Add padding to avoid malforming our name.
-            malformPadding += ((strlen(name) + 2) * 8); // Number of bits in the name section
+            malformPadding += ((strlen(name) + 2) * ((strcmp(CRC, "1") == 0)? 8: 7)); // Number of bits in the name section
         }
 
 
@@ -310,8 +311,8 @@ void sendMessage(int message_len_l)
 
                 // Parent reads result from the child process (the encoded frame)
                 // Add space for control chars and bit conversion
-                // add 1 space for crc flag, add 32 for crc bits if CRC
-                char encoded_frame[(FRAME_LEN + 4) * 8 + 1 + 1 + ((strcmp(CRC, "1") == 0)? 32: 0)]; // The encoded frame
+                // add 1 space for crc flag, add 32 for crc bits if CRC, dont add parity bit if hamming
+                char encoded_frame[(FRAME_LEN + 4) * ((strcmp(CRC, "1") == 0)? 8: 7) + 1 + 1 + ((strcmp(CRC, "1") == 0)? 32: 10)]; // The encoded frame
                 bzero(encoded_frame, sizeof(encoded_frame));
                 // Otherwise, would have old bytes in it
                     
