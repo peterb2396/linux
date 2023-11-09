@@ -77,6 +77,7 @@ int checkCRC(char * data) {
 // Check Hamming
 void checkHamming(char * data)
 {
+    
     // Takes data section only as a param to ignore control sequence
     int hamming_len = strlen(data);
     
@@ -93,7 +94,7 @@ void checkHamming(char * data)
             for (int k = 0; k < i; k++)
             {
                 // Make sure we dont look past the end of the buffer
-                if (j+k >= hamming_len)
+                if (j+k > hamming_len)
                     break;
                 
                 // Do not include the parity itself
@@ -123,6 +124,19 @@ void checkHamming(char * data)
             printf("\nHAMMING CORRECTED BIT %d OF FRAME %d:\n", bad_index, frame);
     }
 
+    
+}
+// Helper functions for hamming
+double Log2(int x)
+{
+    return (log10(x) / log10(2));
+}
+
+// Return if an integer is a power of two
+// (if it will be a parity bit)
+int isPowerOfTwo(int n)
+{
+    return (ceil(Log2(n)) == floor(Log2(n)));
 }
 
 // Remove the hamming bits from the data sequence.
@@ -135,14 +149,16 @@ void removeHammingBits(char* data)
 
     for (int i = 0; i < len; i++)
     {
-        if (!(i + 1) & i) // Bitwise and: Is it a power of two?
+        if (isPowerOfTwo(i+1)) // Bitwise and: Is it a power of two?S
             continue; // Ignore it if so
+            
 
         original[j++] = data[i]; // It was not a parity bit, add it back to the OG data
     }
 
     original[j] = '\0'; // Null term
-    strcpy(data, original); // Overwrite hamming code with original data                              
+    strcpy(data, original); // Overwrite hamming code with original data     
+                       
 }
 
 
@@ -159,6 +175,7 @@ int decodeFrame(int decode_pipe[2])
     // Read the encoded chunk from the consumer through the decode pipe
     __ssize_t num_read = read(decode_pipe[0], buffer, sizeof(buffer));
     buffer[sizeof(buffer)] = '\0';
+    //printf("\n Into decode %s\n", buffer);
     
     
     close(decode_pipe[0]);
@@ -173,16 +190,17 @@ int decodeFrame(int decode_pipe[2])
     int num = 0; //the ascii value of this byte
         // For each bit in the byte
         for (int j = (crc_flag? 1: 0); j < (crc_flag? 8: 7); j++)
-            num += ((int)buffer[25+j] - 48) * power(2, ((crc_flag? 7: 6)-j));
+            num += ((int)buffer[1+ 3*(crc_flag? 8:7)+j] - 48) * power(2, ((crc_flag? 7: 6)-j));
     frame = num - 1;
 
     // Check bits for error before converting
-    if(crc_flag && frame)
+
+    if(crc_flag && frame) // Valid chat frame & CRC
     {
         checkCRC(buffer);
     }
-    else if (frame){ // hamming
-
+    else if (!crc_flag){ // Hamming code
+    
         // check + correct hamming
         checkHamming(&buffer[1 + 7*4]);
 

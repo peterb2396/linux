@@ -14,7 +14,7 @@
 #define _XOPEN_SOURCE 500
 #define NEW_FILE_NAME 28
 #define FRAME_LEN 64
-#define CRC_FLAG "0"
+#define CRC_FLAG "1"
 
 void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path);
 void consumer(int ptoc_pipe[2], int ctop_pipe[2]);
@@ -560,7 +560,7 @@ void consumer(int ptoc_pipe[2], int ctop_pipe[2]) {
     
     }
     // Finally, close the last opened files
-    fseek(outfFile, -1, SEEK_END);
-    ftruncate(fileno(outfFile), ftell(outfFile));
+    //fseek(outfFile, -1, SEEK_END);
+    //ftruncate(fileno(outfFile), ftell(outfFile));
     fclose(outfFile);
 }

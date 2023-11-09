@@ -94,7 +94,6 @@ char * make_hamming(char* data_in)
     int new_len = newSize(strlen(data_in));
 
     
-
     // The new data section, with parity bits
     char* res = malloc(new_len);
     
@@ -103,10 +102,12 @@ char * make_hamming(char* data_in)
 
         // Initialize parity bit locations to 0
         if (isPowerOfTwo(i + 1))
-            res[i] = '0';
+            res[i] = 'p';
+            
         else
             res[i] = data_in[j++]; // Load the original data into the new bitstring
-            
+        
+    
     // String is initialized. Set the parity bits
     int i = 1; // The parity bit at index i - 1
     while (i <= new_len)
@@ -119,7 +120,7 @@ char * make_hamming(char* data_in)
             for (int k = 0; k < i; k++)
             {
                 // Make sure we dont look past the end of the buffer
-                if (j+k >= new_len)
+                if (j+k > new_len)
                     break;
                 
                 // Do not include the parity itself
@@ -171,9 +172,9 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
             strcat(data, __builtin_parity((int)ch)? "1" : "0"); // add the parity bit to the encoded data string
 
         // For the next 7 bits...
-        for (int i = 6; i >= 0; i--) {
+        for (int j = 6; j >= 0; j--) {
             // Determine whether the bit at position i should be one
-            int bit = ((int)ch >> i) & 1;
+            int bit = ((int)ch >> j) & 1;
             char bit_str[2];
             sprintf(bit_str, "%d", bit);
             
@@ -195,7 +196,7 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
     // for now just write the data with no CRC bits
         //write(encode_pipe[1], data, strlen(data));
         //printf("\nEncoded: %s\n", data);
-
+        
         // Seperate the data portion from the control chars
         char* data_portion = &data[1 + 4*7];
         
@@ -206,6 +207,9 @@ int encodeFrame(int encode_pipe[2], int crc_flag)
         char res[strlen(data) + strlen(ham_res)];
         sprintf(res, "%s%s", data, ham_res); // append hamming code to control flags
         free(ham_res);
+
+        
+        
 
         // The final result is control + hamming code
         write(encode_pipe[1], res, strlen(res));

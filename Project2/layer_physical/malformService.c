@@ -14,14 +14,18 @@ int malformFrame(int malform_pipe[2], int malform_padding, int crc_flag, int las
     // Start after control characters (4x 8:7) + 1 crc bit
     int padding = 1 + (4 * (crc_flag? 8:7)) + malform_padding;
 
+    
+
     char buffer[750]; // SPace for encoded frame
     bzero(buffer, sizeof(buffer));
 
     // Read the frame from the producer through the malform pipe
     __ssize_t num_read = read(malform_pipe[0], buffer, sizeof(buffer));
     
-    int message_len = (strlen(buffer) - (crc_flag? 32: 0) - (last? 8: 0)- padding);
-    //printf("pad: %d\n", padding);
+    int message_len = (strlen(buffer) - (crc_flag? 32: 0) - (last && crc_flag? 8: 0)- padding);    
+
+    //printf("%d, %d\n", padding, message_len);
+    //printf("pad: %d\n", malform_padding);
     //printf("MSG len: %d\n", message_len/8);
 
     close(malform_pipe[0]); 
