@@ -92,7 +92,7 @@ void producer(int ptoc_pipe[2], int ctop_pipe[2], const char* folder_path) {
                     srand(seed);
 
                     // Every other file will use CRC
-                    sprintf(CRC_FLAG, "%s", ((fileCount++)%2? "1": "0"));
+                    sprintf(CRC_FLAG, "%s", ((fileCount++)%2? "0": "1"));
                     
                     // Prepare a buffer to read a chunk of data from the input
                     char buffer[FRAME_LEN + 1];
