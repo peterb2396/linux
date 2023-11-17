@@ -1,0 +1,7 @@
+TESTING
+You are to use three different text files for testing. The testing file used for project-1 as well as
+the Machine representation of the source code text are to be used as files. Your third file must be
+long enough to require many frames to be created. Your testing must include the following:
+1. An error detection by CRC,
+2. An error detection by Hamming, and
+3. An error detection and correction by Hamming.
