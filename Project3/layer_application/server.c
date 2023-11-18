@@ -457,7 +457,7 @@ void* handle_client(void* arg) {
             {
                 //printf("\nTO DECODER: %s\n", buffer);
                 // Write data to be decoded through decode pipe
-                write(decode_pipe[1], buffer, strlen(buffer));
+                write(decode_pipe[1], helper_result, strlen(helper_result));
                 close(decode_pipe[1]);  // Done writing frame to be decoded
 
                 // When child is done, read result
@@ -516,68 +516,68 @@ void* handle_client(void* arg) {
 
                     int chunk_len = read(deframe_pipe[0], parsed_frame, sizeof(parsed_frame));
                     close(deframe_pipe[0]); 
+
+
+                    // Store decoded msg in chat histories: 
+                    // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
+                    my_history_file = fopen(my_history_path, "a+");
+                    their_history_file = fopen(their_history_path, "a+");
+                    
+                    // Make a new file if this is a new message
+                    char prefix[strlen(client.name) + strlen(": ")];
+                    sprintf(prefix, "%s: ", client.name);
+
+                    // Delete the old message file
+                    if (strncmp(parsed_frame, prefix, strlen(prefix)) == 0) {
+                        remove("../output/chat-debug/last_msg.done");
+                    }
+                    chat_debug_file = fopen("../output/chat-debug/last_msg.done", "a+");
+                    
+
+                    // Handle errors for my history file (if manually deleted)
+                    if (my_history_file == NULL)
+                    {
+                        // My folder was manually deleted, fix it
+                        char path[strlen(HISTORY_DIR) + strlen(client.name) + 2];
+                        snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.name);
+                        mkdir(path, 0777);
+
+                        my_history_file = fopen(my_history_path, "a+"); 
+                    }
+
+                    // Handle errors for their history file (if manually deleted)
+                    if (their_history_file == NULL)
+                    {
+                        // Their folder was manually deleted, fix it
+                        char path[strlen(HISTORY_DIR) + strlen(client.recip_name) + 2];
+                        snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.recip_name);
+                        mkdir(path, 0777);
+
+                        their_history_file = fopen(their_history_path, "a+"); 
+                    }
+
+                    // Remove STX ASCII-2 Char that signified start of string
+                    if (parsed_frame[strlen(parsed_frame) - 1] == 2)
+                        parsed_frame[strlen(parsed_frame) - 1] = '\0'; 
+                    
+
+                    
+                    // Store 'name: message' in history
+                    fprintf(my_history_file, "%s\n", parsed_frame);
+                    fprintf(their_history_file, "%s\n", parsed_frame);
+
+                    // Stpre the message in the chat-debug
+                    fprintf(chat_debug_file, "%s", parsed_frame);
+
+
+                    // Close the history files (to save them)
+                    fclose(my_history_file);
+                    fclose(their_history_file);
+                    fclose(chat_debug_file);
                     
                 } // Last fork parent.
             } // Inner decode pipeline over.
         
-
-
-            // Store decoded msg in chat histories: 
-            // a+ creates or opens and allows read write. r+ does not create new! and w+ will truncate
-            my_history_file = fopen(my_history_path, "a+");
-            their_history_file = fopen(their_history_path, "a+");
-            
-            // Make a new file if this is a new message
-            char prefix[strlen(client.name) + strlen(": ")];
-            sprintf(prefix, "%s: ", client.name);
-
-            // Delete the old message file
-            if (strncmp(parsed_frame, prefix, strlen(prefix)) == 0) {
-                remove("../output/chat-debug/last_msg.done");
-            }
-            chat_debug_file = fopen("../output/chat-debug/last_msg.done", "a+");
-            
-
-            // Handle errors for my history file (if manually deleted)
-            if (my_history_file == NULL)
-            {
-                // My folder was manually deleted, fix it
-                char path[strlen(HISTORY_DIR) + strlen(client.name) + 2];
-                snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.name);
-                mkdir(path, 0777);
-
-                my_history_file = fopen(my_history_path, "a+"); 
-            }
-
-            // Handle errors for their history file (if manually deleted)
-            if (their_history_file == NULL)
-            {
-                // Their folder was manually deleted, fix it
-                char path[strlen(HISTORY_DIR) + strlen(client.recip_name) + 2];
-                snprintf(path, sizeof(path), "%s/%s", HISTORY_DIR, client.recip_name);
-                mkdir(path, 0777);
-
-                their_history_file = fopen(their_history_path, "a+"); 
-            }
-
-            // Remove STX ASCII-2 Char that signified start of string
-            if (parsed_frame[strlen(parsed_frame) - 1] == 2)
-                parsed_frame[strlen(parsed_frame) - 1] = '\0'; 
-            
-
-            
-            // Store 'name: message' in history
-            fprintf(my_history_file, "%s", parsed_frame);
-            fprintf(their_history_file, "%s", parsed_frame);
-
-            // Stpre the message in the chat-debug
-            fprintf(chat_debug_file, "%s", parsed_frame);
-
-
-            // Close the history files (to save them)
-            fclose(my_history_file);
-            fclose(their_history_file);
-            fclose(chat_debug_file);
             
         }
     } // Outer pipeline: For helper node, over.

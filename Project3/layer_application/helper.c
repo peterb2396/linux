@@ -19,10 +19,13 @@
 // 2. Capitalize the frame (capitalizeService)
 // 3. Encode the frame back (encodeService)
 // 4. Send back to server through helper node socket
-
 char * serverEncoder(char* raw);
 
+
+
 // Perform the service
+// Server decoder will decode the original message
+// and capitalize it. Then send to serverEncoder to reencode to transmit back
 int serverDecoder(int helper_pipe[2])
 {
     // The input
@@ -189,7 +192,7 @@ int serverDecoder(int helper_pipe[2])
         bzero(capped_frame, sizeof(capped_frame));
 
         // Listen for & store capitalized frame: same length as input
-        int capitalized_len = read(capitalize_pipe[0], capped_frame, strlen(parsed_frame));
+        int capitalized_len = read(capitalize_pipe[0], capped_frame, strlen(parsed_frame) - 1);
         close(capitalize_pipe[0]);  // Done reading capitalizee data
     }
     
@@ -213,6 +216,8 @@ int serverDecoder(int helper_pipe[2])
 
 }
 
+// Server encoder will encode the capital result
+// and write it back to the server
 char * serverEncoder(char* raw)
 {
     

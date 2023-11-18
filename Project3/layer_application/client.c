@@ -808,7 +808,7 @@ void receiveMessage(const char *content) {
     
 }
     // Print the decoded result
-    printf("%s", parsed_frame);
+    printf("%s\n", parsed_frame);
     fflush(stdout);
     
 }
