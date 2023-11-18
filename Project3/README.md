@@ -12,7 +12,22 @@
 10. Error detection by CRC and hamming.
 11. File simulator that runs automatically to show error insertion / detection / framing
 12. Sophisticated folder structure for input, output and debug files to be viewed
+13. Multithreaded capitalization service.
 
+### NOTE ABOUT THIS PROJECT
+1. This project was created as a fork of the previous CRC/HAMMING-Chat-Transmitter.
+2. Input files display CRC / HAMMING working perfectly
+3. Chat error insertion was disabled (but detection was not)
+4. The above was to instead display the new feature: Multithreaded vowel capitalization!
+5. The new feature added files ```helper.c```, ```capitalizeService.c```.
+
+### THE CAPITALIZATION SPECIFICATION
+The new feature is performed by a new helper node. Data is decoded and sent to this node by a serverDecoder.
+The new feature was added to display 6 threads working on the same data, waiting for each other to finish so that sensitive data is protected and not accessed in bad times with race conditions. 5 threads for vowels exist each with a queue of length 5.
+
+Thread 1 is responsible for the letter a and is the only thread unlocked to begin with. it processes 5 characters of the input file, capitilizing any a's and passing the queue to the next thread, thread 2, which is then unlocked to operate on all e's, and so on. The next 5 letters enter thread 1's queue in a pipelined nature to process the next 5 characters.
+
+The result is again encoded by serverEncoder and sent back to the original server to transmit to clients and store in their history.
 
 ## How to run this program
 1. Navigate to this containing folder
@@ -35,7 +50,7 @@ However, it is not necessary to specify a custom port.
 ## If you want to edit source code and recompile,
 1. Server: ```gcc -o server server.c -lpthread```
 2. Client: ```gcc -o client client.c -lm```
-3. Service files: ```gcc -o <serviceName> <serviceName>.c```
+3. Service files: ```gcc -o <serviceName> <serviceName>.c -lm```
 4. File Malformer: ```gcc -o files files.c -lm```
 
 
