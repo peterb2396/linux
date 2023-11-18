@@ -567,7 +567,7 @@ void* handle_client(void* arg) {
                     fprintf(their_history_file, "%s\n", parsed_frame);
 
                     // Stpre the message in the chat-debug
-                    fprintf(chat_debug_file, "%s", parsed_frame);
+                    fprintf(chat_debug_file, "%s\n", parsed_frame);
 
 
                     // Close the history files (to save them)
